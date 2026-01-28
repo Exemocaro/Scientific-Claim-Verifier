@@ -1,5 +1,6 @@
 # Scientific Claim Verifier
 
+Full code for the Master Thesis **"Development of a Language Model-Based Framework for Credibility Assessment and Verification of Scientific Claims"** by **Mateus Pereira**.
 A framework for automated verification of scientific claims using Large Language Models and proposition-based retrieval. Made in Python. Uses langchain and fastapi.
 
 ## Quick Start
@@ -26,12 +27,8 @@ A framework for automated verification of scientific claims using Large Language
     # LLM Provider: "gemini" or "azure"
     LLM_PROVIDER=gemini
 
-    # Gemini API Key (required when LLM_PROVIDER=gemini)
+    # Gemini API Key
     GEMINI_API_KEY=your_gemini_api_key_here
-
-    # Azure OpenAI credentials (required when LLM_PROVIDER=azure)
-    AZURE_OPENAI_API_KEY=your_azure_key_here
-    AZURE_API_VERSION=2024-08-01-preview
 
     # API keys for paper search
     SEMANTIC_SCHOLAR_API_KEY=your_semantic_scholar_key_here
