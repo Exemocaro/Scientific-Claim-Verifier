@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Proposition Details{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="/propositions" class="back-link">← Back to Propositions</a>
+    <h2> Proposition Details</h2>
+</div>
+
+<div class="proposition-detail-container">
+    <!-- Single Proposition -->
+    <section class="detail-section">
+        <h3> Proposition</h3>
+        
+        {% if proposition %}
+        {% set prop = proposition %}
+        <div class="proposition-card-large {% if prop.is_high_quality() %}quality-pass{% else %}quality-fail{% endif %}">
+            <div class="prop-status">
+                {% if prop.is_high_quality() %}
+                <span class="status-badge pass"> Quality</span>
+                {% else %}
+                <span class="status-badge fail"> Low Quality</span>
+                {% endif %}
+            </div>
+            
+            <div class="prop-text-large">{{ prop.text }}</div>
+            
+            {% if prop.evaluation %}
+            <div class="quality-scores-detailed">
+                <h4>Quality Evaluation Scores:</h4>
+                <div class="scores-grid">
+                    <div class="score-item">
+                        <span class="score-label">Accuracy</span>
+                        <span class="score-value">{{ prop.evaluation.accuracy }}/10</span>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width: {{ prop.evaluation.accuracy * 10 }}%"></div>
+                        </div>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-label">Clarity</span>
+                        <span class="score-value">{{ prop.evaluation.clarity }}/10</span>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width: {{ prop.evaluation.clarity * 10 }}%"></div>
+                        </div>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-label">Completeness</span>
+                        <span class="score-value">{{ prop.evaluation.completeness }}/10</span>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width: {{ prop.evaluation.completeness * 10 }}%"></div>
+                        </div>
+                    </div>
+                    <div class="score-item">
+                        <span class="score-label">Conciseness</span>
+                        <span class="score-value">{{ prop.evaluation.conciseness }}/10</span>
+                        <div class="score-bar">
+                            <div class="score-fill" style="width: {{ prop.evaluation.conciseness * 10 }}%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="average-score">
+                    <strong>Average Score:</strong> {{ "%.1f"|format(prop.evaluation.average_score()) }}/10
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="prop-meta-large">
+                <span class="meta-badge">Chunk: <a href="/chunks/{{ paper.id }}/{{ prop.chunk_id }}" style="text-decoration: none; color: inherit;">{{ prop.chunk_id }}</a></span>
+                {{ format_source_badge(chunk.section, prop.page) | safe }}
+            </div>
+        </div>
+        {% else %}
+        <p class="empty-message">Proposition not found.</p>
+        {% endif %}
+    </section>
+
+    <!-- Similar Propositions -->
+    <section class="detail-section">
+        <h3> Similar Propositions</h3>
+        <p class="subtitle" style="margin-bottom: 12px;">Propositions with similar meaning based on semantic similarity</p>
+        <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.9em; line-height: 1.5;">
+                <strong>About similarity scores:</strong> The "% match" represents semantic similarity between proposition embeddings.
+                90-100% = near-identical meaning, 70-90% = strong topical match, 50-70% = related concepts, &lt;50% = weakly related.
+                This measures meaning alignment, not factual agreement or truthfulness.
+            </p>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <label for="similar-propositions-count" style="font-weight: 500;">Number of propositions:</label>
+            <input
+                type="number"
+                id="similar-propositions-count"
+                value="5"
+                min="1"
+                max="20"
+                class="number-input"
+                style="width: 80px;"
+            />
+            <button class="action-btn" onclick="loadSimilarPropositions()" id="load-similar-btn" style="background-color: #2196f3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                See Similar Propositions
+            </button>
+        </div>
+        <div id="similar-propositions-container" style="display: none; margin-top: 20px;">
+            <div id="similar-propositions-list"></div>
+        </div>
+    </section>
+
+    <!-- Source Chunk -->
+    <section class="detail-section">
+        <h3> Source Chunk</h3>
+        <p class="subtitle">The text chunk this proposition was extracted from</p>
+        <div class="chunk-display">
+            <div class="chunk-header">
+                <a href="/chunks/{{ paper.id }}/{{ chunk.chunk_id }}" style="text-decoration: none; color: inherit;">
+                    <strong>{{ chunk.chunk_id }}</strong>
+                </a>
+                {{ format_source_badge(chunk.section, chunk.page) | safe }}
+            </div>
+            <div class="chunk-text-display">{{ chunk.text }}</div>
+            <div class="chunk-stats">
+                <span class="stat-badge">Length: {{ chunk.text|length }} characters</span>
+                <a href="/chunks/{{ paper.id }}/{{ chunk.chunk_id }}" class="view-all-link">View All Propositions from this Chunk →</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Source Paper -->
+    <section class="detail-section">
+        <h3> Source Paper</h3>
+        <div class="paper-info-card">
+            <a href="/papers/{{ paper.id }}" class="paper-title-link">
+                <h4>{{ paper.title }}</h4>
+            </a>
+            
+            <div class="paper-meta-grid">
+                {% if paper.doi %}
+                <div class="meta-item">
+                    <strong>DOI:</strong> {{ paper.doi }}
+                </div>
+                {% endif %}
+                <div class="meta-item">
+                    <strong>Year:</strong> {{ paper.year or "Unknown" }}
+                </div>
+                <div class="meta-item">
+                    <strong>Citations:</strong> {{ paper.citations or 0 }}
+                </div>
+                <div class="meta-item">
+                    <strong>Source:</strong> {{ paper.source }}
+                </div>
+                {% if paper.credibility %}
+                <div class="meta-item">
+                    <strong>Credibility:</strong> {{ "%.1f"|format(paper.credibility.rating) }}/5 ★
+                </div>
+                <div class="meta-item">
+                    <strong>Study Type:</strong> {{ paper.credibility.study_type }}
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if paper.authors %}
+            <div class="paper-authors">
+                <strong>Authors:</strong> {{ paper.authors[:5]|join(", ") }}{% if paper.authors|length > 5 %}, and {{ paper.authors|length - 5 }} more{% endif %}
+            </div>
+            {% endif %}
+            
+            {% if paper.url %}
+            <div class="paper-links">
+                <a href="{{ paper.url }}" target="_blank" class="external-link"> View Paper</a>
+                <a href="/papers/{{ paper.id }}" class="external-link secondary"> View Full Details</a>
+            </div>
+            {% endif %}
+        </div>
+    </section>
+</div>
+
+<script>
+// Helper function to format source badge (section or page)
+function formatSourceBadge(section, page) {
+    if (section) {
+        const formatted = section.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return `<span class="section-badge">${formatted}</span>`;
+    } else if (page) {
+        return `<span class="page-badge">Page ${page}</span>`;
+    }
+    return '';
+}
+
+async function loadSimilarPropositions() {
+    const btn = document.getElementById('load-similar-btn');
+    const container = document.getElementById('similar-propositions-container');
+    const list = document.getElementById('similar-propositions-list');
+    const countInput = document.getElementById('similar-propositions-count');
+    const topK = countInput.value || 5;
+
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+        const propositionId = '{{ proposition.prop_id }}';
+        if (!propositionId || propositionId.startsWith('{')) {
+            alert('Error: Could not determine proposition ID');
+            btn.textContent = 'See Similar Propositions';
+            return;
+        }
+        const response = await fetch(`/api/propositions/${propositionId}/similar?top_k=${topK}`);
+        const result = await response.json();
+
+        if (response.ok && result.similar_propositions) {
+            if (result.similar_propositions.length === 0) {
+                list.innerHTML = '<p class="empty-message">No similar propositions found.</p>';
+            } else {
+                let html = '<div class="similar-propositions-grid">';
+                result.similar_propositions.forEach(prop => {
+                    const qualityBadge = prop.is_quality
+                        ? '<span class="status-badge pass" style="font-size: 0.75em; padding: 2px 8px; white-space: nowrap;">Quality</span>'
+                        : '<span class="status-badge fail" style="font-size: 0.75em; padding: 2px 8px; white-space: nowrap;">Low Quality</span>';
+
+                    html += `
+                        <div class="similar-proposition-card" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #fafafa;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <div style="flex: 1;">
+                                    <a href="${prop.url}" style="font-weight: 600; color: #1976d2; text-decoration: none; display: block; margin-bottom: 4px;">
+                                        ${prop.text}
+                                    </a>
+                                    <div style="display: flex; gap: 8px; align-items: center; margin-top: 8px;">
+                                        ${qualityBadge}
+                                        <span style="font-size: 0.85em; color: #666;">
+                                            from <a href="/papers/${prop.paper_id}" style="color: #1976d2; text-decoration: none;">${prop.paper_title}</a>
+                                        </span>
+                                    </div>
+                                </div>
+                                <span style="background-color: #e3f2fd; color: #1976d2; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; white-space: nowrap; margin-left: 12px;">
+                                    ${(prop.similarity_score * 100).toFixed(1)}% match
+                                </span>
+                            </div>
+                            <div style="font-size: 0.85em; color: #888; margin-top: 8px;">
+                                Chunk: ${prop.chunk_id} • ${formatSourceBadge(prop.section, prop.page)}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                list.innerHTML = html;
+            }
+            container.style.display = 'block';
+            btn.textContent = 'Refresh Similar Propositions';
+        } else {
+            alert('Error loading similar propositions');
+            btn.textContent = 'See Similar Propositions';
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        btn.textContent = 'See Similar Propositions';
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

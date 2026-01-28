@@ -1,0 +1,4 @@
+*.faiss filter=lfs diff=lfs merge=lfs -text
+*.pkl filter=lfs diff=lfs merge=lfs -text
+*.db filter=lfs diff=lfs merge=lfs -text
+scientific-claim-verifier/process_log.txt filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,744 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Claim - Scientific Claim Verification{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2> Verify Scientific Claim</h2>
+    <p class="subtitle">Enter a scientific claim to verify against the literature</p>
+    {% if kb_stats %}
+    <div class="kb-status">
+        <span class="status-item"> Knowledge Base: {{ kb_stats.papers }} papers</span>
+        <span class="status-item"> {{ kb_stats.propositions_quality }} quality propositions</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Verification Form -->
+<div class="verify-form-section" id="verifyFormSection">
+    <form method="post" action="/verify" class="verify-form" id="verifyForm" onsubmit="return handleSubmit(event)">
+        <div class="form-group">
+            <label for="claim">Scientific Claim:</label>
+            <textarea 
+                name="claim" 
+                id="claim" 
+                rows="4" 
+                placeholder="Enter a scientific claim to verify, e.g., 'Green tea prevents cancer'"
+                class="claim-input"
+                required
+            >{{ claim or '' }}</textarea>
+        </div>
+
+        <!-- Agent vs Agentless Mode Selector -->
+        <div class="form-group">
+            <label>Verification System:</label>
+            <div class="toggle-group two-column">
+                <input type="radio" name="verification_mode" id="mode_agentless" value="agentless" {% if not verification_mode or verification_mode == 'agentless' %}checked{% endif %} onchange="toggleVerificationSystem()">
+                <label for="mode_agentless" class="toggle-button">
+                    <span class="button-content">
+                        <strong>Traditional Pipeline</strong>
+                        <small>Direct claim verification (fast, predictable)</small>
+                    </span>
+                </label>
+
+                <input type="radio" name="verification_mode" id="mode_agent" value="agent" {% if verification_mode == 'agent' %}checked{% endif %} onchange="toggleVerificationSystem()">
+                <label for="mode_agent" class="toggle-button">
+                    <span class="button-content">
+                        <strong>AI Agent</strong>
+                        <small>Intelligent autonomous evidence gathering</small>
+                    </span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Agent Options (shown when agent mode selected) -->
+        <div id="agentOptions" style="display: {% if verification_mode == 'agent' %}block{% else %}none{% endif %};">
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="agent_quality_only" id="agent_quality_only" {% if agent_quality_only %}checked{% endif %}>
+                    Use Quality Propositions Only
+                </label>
+                <small>Search only high-quality propositions (recommended for better evidence)</small>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="allow_online_search" id="allow_online_search" {% if allow_online_search %}checked{% endif %}>
+                    Allow Online Search
+                </label>
+                <small>Enable searching online databases (PubMed, Semantic Scholar) when KB evidence is insufficient</small>
+            </div>
+        </div>
+
+        <!-- Traditional Pipeline Options (hidden when agent mode selected) -->
+        <div id="traditionalOptions" style="display: {% if not verification_mode or verification_mode == 'agentless' %}block{% else %}none{% endif %};">
+
+        <div class="form-group">
+            <label>Search Mode:</label>
+            <div class="toggle-group three-column">
+                <input type="radio" name="search_mode" id="mode_kb_quality" value="kb_quality" {% if not search_mode or search_mode == 'kb_quality' %}checked{% endif %} onchange="toggleMaxPapers()">
+                <label for="mode_kb_quality" class="toggle-button">
+                    <span class="button-icon"></span>
+                    <span class="button-content">
+                        <strong>Quality Propositions</strong>
+                        <small>Use high-quality extracted claims (Recommended)</small>
+                    </span>
+                </label>
+
+                <input type="radio" name="search_mode" id="mode_kb_all" value="kb_all" {% if not search_mode or search_mode == 'kb_all' %}checked{% endif %} onchange="toggleMaxPapers()">
+                <label for="mode_kb_all" class="toggle-button">
+                    <span class="button-icon"></span>
+                    <span class="button-content">
+                        <strong>All Propositions</strong>
+                        <small>Include all extracted propositions</small>
+                    </span>
+                </label>
+                
+                <input type="radio" name="search_mode" id="mode_search" value="with_search" {% if search_mode == 'with_search' %}checked{% endif %} onchange="toggleMaxPapers()">
+                <label for="mode_search" class="toggle-button">
+                    <span class="button-icon"></span>
+                    <span class="button-content">
+                        <strong>Search Online Databases</strong>
+                        <small>Extract evidence, then verify</small>
+                    </span>
+                </label>
+
+            </div>
+        </div>
+        
+        <div class="form-group" id="maxPapersGroup" style="display: {% if search_mode == 'with_search' %}block{% else %}none{% endif %};">
+            <label for="max_papers">Maximum Papers to Search:</label>
+            <input
+                type="number"
+                name="max_papers"
+                id="max_papers"
+                value="{{ max_papers or 30 }}"
+                class="number-input"
+            />
+            <small>Higher values take longer but may provide more comprehensive results</small>
+        </div>
+
+        <div class="form-group">
+            <label for="max_props_per_paper">Maximum Propositions per Source Paper:</label>
+            <input
+                type="number"
+                name="max_props_per_paper"
+                id="max_props_per_paper"
+                value="{{ max_props_per_paper or 5 }}"
+                min="1"
+                class="number-input"
+            />
+            <small>Limit propositions from each paper to ensure source diversity</small>
+        </div>
+
+        <div class="form-group">
+            <label for="max_propositions">Maximum Total Propositions to Retrieve:</label>
+            <input
+                type="number"
+                name="max_propositions"
+                id="max_propositions"
+                value="{{ max_propositions or 50 }}"
+                class="number-input"
+            />
+            <small>Total number of propositions to retrieve per query</small>
+        </div>
+
+        <!-- Options for Online Search -->
+        <div class="form-group" id="onlineSearchOptions" style="display: {% if search_mode == 'with_search' %}block{% else %}none{% endif %};">
+            <label>
+                <input type="checkbox" name="use_full_text" id="use_full_text" {% if use_full_text %}checked{% endif %}>
+                Use Full Text (when available)
+            </label>
+            <small>Extract propositions from full text instead of abstracts only</small>
+        </div>
+
+        <div class="form-group" id="onlineSearchEvaluation" style="display: {% if search_mode == 'with_search' %}block{% else %}none{% endif %};">
+            <label>
+                <input type="checkbox" name="skip_evaluation" id="skip_evaluation" {% if skip_evaluation %}checked{% endif %}>
+                Skip Proposition Quality Evaluation
+            </label>
+            <small>Faster, but may include lower-quality propositions</small>
+        </div>
+
+        <!-- Options for Local Search -->
+        <div class="form-group" id="localSearchFullText" style="display: {% if search_mode != 'with_search' %}block{% else %}none{% endif %};">
+            <label>
+                <input type="checkbox" name="use_abstract_only" id="use_abstract_only" {% if use_abstract_only %}checked{% endif %}>
+                Use Abstract Propositions Only
+            </label>
+            <small>Only use propositions extracted from paper abstracts</small>
+        </div>
+
+        </div> <!-- End traditionalOptions -->
+
+        <button type="submit" class="verify-button-submit"> Verify Claim</button>
+    </form>
+</div>
+
+<!-- Loading Animation -->
+<div id="loadingSection" class="loading-section" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Verifying claim...</p>
+    <div id="logsDisplay" class="logs-display"></div>
+</div>
+
+<!-- Agent Streaming Visualization -->
+{% if agent_mode %}
+<div id="agentStreamSection" class="agent-stream-section">
+    <h3>AI Agent Working...</h3>
+    <div id="agentLog" class="agent-log"></div>
+    <div id="agentStatus" class="agent-status">
+        <div class="loading-spinner"></div>
+        <p>Agent is analyzing the claim and gathering evidence...</p>
+    </div>
+</div>
+
+<!-- Agent Results Container (hidden initially) -->
+<div id="agentResults" style="display: none;"></div>
+
+<script>
+console.log('[DEBUG] Agent mode script block loaded - agent_mode is TRUE');
+// Helper function to format source badge (section or page)
+function formatSourceBadge(section, page) {
+    if (section) {
+        const formatted = section.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        return `<span class="section-badge">${formatted}</span>`;
+    } else if (page) {
+        return `<span class="page-badge">Page ${page}</span>`;
+    }
+    return '';
+}
+
+// Start SSE stream for agent mode
+(function() {
+    console.log('[JS] Starting agent verification script');
+
+    const claim = {{ claim | tojson }};
+    const allowOnlineSearch = {{ allow_online_search | tojson }};
+    const agentQualityOnly = {{ agent_quality_only | tojson }};
+
+    console.log('[JS] Claim:', claim);
+    console.log('[JS] Online search:', allowOnlineSearch);
+    console.log('[JS] Quality only:', agentQualityOnly);
+
+    const url = `/api/verify-agent-stream?claim=${encodeURIComponent(claim)}&allow_online_search=${allowOnlineSearch}&agent_quality_only=${agentQualityOnly}`;
+    console.log('[JS] Connecting to:', url);
+
+    const eventSource = new EventSource(url);
+    const agentLog = document.getElementById('agentLog');
+    const agentStatus = document.getElementById('agentStatus');
+    const agentResults = document.getElementById('agentResults');
+
+    console.log('[JS] EventSource created, waiting for connection...');
+
+    eventSource.onopen = function() {
+        console.log('[JS] EventSource connection opened!');
+    };
+
+    eventSource.onmessage = function(e) {
+        console.log('[JS] Received event:', e.data.substring(0, 100) + '...');
+        try {
+            const event = JSON.parse(e.data);
+
+            if (event.type === 'tool_call') {
+                const toolDiv = document.createElement('div');
+                toolDiv.className = 'agent-tool-call';
+                let argsHtml = '';
+                for (const [key, value] of Object.entries(event.args)) {
+                    argsHtml += `<div style="margin-left: 20px;">${key}: ${value}</div>`;
+                }
+                toolDiv.innerHTML = `
+                    <div style="margin: 8px 0;"><strong> [Tool Call]</strong> ${event.tool}</div>
+                    ${argsHtml}
+                `;
+                agentLog.appendChild(toolDiv);
+                agentLog.scrollTop = agentLog.scrollHeight;
+            } else if (event.type === 'tool_result') {
+                const resultDiv = document.createElement('div');
+                resultDiv.className = 'agent-tool-result';
+                // Show only first line
+                const firstLine = event.content.split('\n')[0];
+                resultDiv.innerHTML = `<div style="margin: 4px 0; color: #666;"> [Tool Result] ${firstLine}...</div>`;
+                agentLog.appendChild(resultDiv);
+                agentLog.scrollTop = agentLog.scrollHeight;
+            } else if (event.type === 'agent_message') {
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'agent-final-message';
+                msgDiv.innerHTML = `<div style="margin: 12px 0; padding: 12px; background: #f0f0f0; border-radius: 4px;"><strong> [Agent Final Answer]</strong><br><pre style="white-space: pre-wrap; margin-top: 8px;">${event.content}</pre></div>`;
+                agentLog.appendChild(msgDiv);
+                agentLog.scrollTop = agentLog.scrollHeight;
+            } else if (event.type === 'complete') {
+                console.log('[JS] Verification complete!');
+                agentStatus.innerHTML = '<p> Agent completed!</p>';
+                eventSource.close();
+
+                // Display results if available
+                if (event.result) {
+                    displayAgentResults(event);
+                }
+            } else if (event.type === 'error') {
+                console.error('[JS] Error event received:', event.error);
+                agentStatus.innerHTML = `<p style="color: red;"> Error: ${event.error}</p>`;
+                if (event.details) {
+                    const detailsDiv = document.createElement('details');
+                    detailsDiv.className = 'error-details';
+                    detailsDiv.innerHTML = `<summary>Show error details</summary><pre>${event.details}</pre>`;
+                    agentStatus.appendChild(detailsDiv);
+                }
+                eventSource.close();
+            }
+        } catch (err) {
+            console.error('[JS] Error parsing event:', err, 'Raw data:', e.data);
+        }
+    };
+
+    eventSource.onerror = function(error) {
+        console.error('[JS] EventSource error:', error);
+        agentStatus.innerHTML = '<p style="color: red;"> Connection error. Please try again.</p>';
+        eventSource.close();
+    };
+
+    function displayAgentResults(data) {
+        const result = data.result;
+        const evidencePapers = data.evidence_papers;
+        const confidenceInterpretation = data.confidence_interpretation;
+        const confidenceLevel = data.confidence_level;
+
+        // Keep streaming section visible but update status
+        const agentStreamSection = document.getElementById('agentStreamSection');
+        agentStreamSection.querySelector('h3').textContent = ' Agent Logs';
+
+        // Make logs collapsible
+        const agentLogDiv = document.getElementById('agentLog');
+        const agentStatusDiv = document.getElementById('agentStatus');
+
+        // Create collapsible container
+        const collapsibleDiv = document.createElement('div');
+        collapsibleDiv.style.marginTop = '16px';
+
+        const toggleButton = document.createElement('button');
+        toggleButton.textContent = ' Show Agent Logs';
+        toggleButton.className = 'verify-button-submit';
+        toggleButton.style.marginBottom = '12px';
+        toggleButton.onclick = function() {
+            if (agentLogDiv.style.display === 'none') {
+                agentLogDiv.style.display = 'block';
+                toggleButton.textContent = ' Hide Agent Logs';
+            } else {
+                agentLogDiv.style.display = 'none';
+                toggleButton.textContent = ' Show Agent Logs';
+            }
+        };
+
+        // Hide logs initially
+        agentLogDiv.style.display = 'none';
+
+        // Insert toggle button before logs
+        agentStreamSection.insertBefore(toggleButton, agentLogDiv);
+
+        // Build results HTML
+        let html = `
+        <div class="verification-results">
+            <!-- Verdict -->
+            <div class="verdict-section">
+                <h3>Verdict</h3>
+                <div class="verdict-card verdict-${result.verdict.toLowerCase().replace('_', '-')}">
+                    ${result.verdict === 'SUPPORTS' ? '<span class="verdict-icon"></span>' :
+                      result.verdict === 'REFUTES' ? '<span class="verdict-icon"></span>' :
+                      '<span class="verdict-icon">❓</span>'}
+                    <span class="verdict-text">${result.verdict.replace('_', ' ')}</span>
+                </div>
+            </div>
+
+            <!-- Confidence -->
+            <div class="confidence-section">
+                <h3>Confidence Level</h3>
+                <div class="confidence-card">
+                    <div class="confidence-value">${result.confidence.toFixed(1)}/10</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${result.confidence * 10}%"></div>
+                    </div>
+                </div>
+                ${confidenceInterpretation ? `
+                <div class="confidence-interpretation confidence-level-${confidenceLevel}">
+                    <p class="interpretation-text"> ${confidenceInterpretation}</p>
+                </div>
+                ` : ''}
+            </div>
+
+            <!-- Reasoning -->
+            <div class="reasoning-section">
+                <h3>Reasoning</h3>
+                <div class="reasoning-text markdown-content"></div>
+            </div>
+
+            <!-- Evidence Summary -->
+            <div class="evidence-summary">
+                <h3>Evidence Summary</h3>
+                <p class="subtitle">Click to expand and view details</p>
+                <div class="summary-stats clickable">
+                    <div class="summary-item" onclick="toggleVerifySection('evidence')" data-section="evidence">
+                        <strong>${result.evidence.length}</strong>
+                        <span>Propositions Used</span>
+                    </div>
+                    <div class="summary-item" onclick="toggleVerifySection('chunks')" data-section="chunks">
+                        <strong>${data.evidence_chunks ? data.evidence_chunks.length : 0}</strong>
+                        <span>Source Chunks</span>
+                    </div>
+                    <div class="summary-item" onclick="toggleVerifySection('sources')" data-section="sources">
+                        <strong>${evidencePapers.length}</strong>
+                        <span>Source Papers</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Evidence Propositions (toggleable) -->
+            <div class="evidence-section toggleable-verify-section" id="evidence-section" style="display: none;">
+                <h3>Evidence Propositions (${result.evidence.length})</h3>
+                <div class="evidence-list">
+                    ${result.evidence.map(prop => `
+                    <div class="evidence-item">
+                        <a href="/propositions/${prop.prop_id}" class="evidence-link">
+                            <div class="evidence-text">${prop.text}</div>
+                        </a>
+                        <div class="evidence-meta">
+                            <strong>Source:</strong>
+                            <a href="/papers/${prop.paper_id}" class="paper-link">${prop.source}</a>
+                            • ${formatSourceBadge(prop.section, prop.page)}
+                        </div>
+                        ${prop.evaluation ? `
+                        <div class="quality-scores-inline">
+                            <span class="score-item">Accuracy: ${prop.evaluation.accuracy}/10</span>
+                            <span class="score-item">Clarity: ${prop.evaluation.clarity}/10</span>
+                            <span class="score-item">Completeness: ${prop.evaluation.completeness}/10</span>
+                            <span class="score-item">Conciseness: ${prop.evaluation.conciseness}/10</span>
+                            <span class="score-item average">Avg: ${((prop.evaluation.accuracy + prop.evaluation.clarity + prop.evaluation.completeness + prop.evaluation.conciseness) / 4).toFixed(1)}/10</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <!-- Source Papers (toggleable) -->
+            ${evidencePapers.length > 0 ? `
+            <div class="sources-section toggleable-verify-section" id="sources-section" style="display: none;">
+                <h3>Source Papers (${evidencePapers.length})</h3>
+                <div class="sources-list">
+                    ${evidencePapers.map(paper => `
+                    <div class="source-card">
+                        <a href="/papers/${paper.id}" class="source-title">${paper.title}</a>
+                        <div class="source-meta">
+                            <span>📅 ${paper.year || "Unknown"}</span>
+                            <span> ${paper.citations || 0} citations</span>
+                            ${paper.credibility ? `
+                            <span>★ ${paper.credibility.rating.toFixed(1)}/5</span>
+                            <span> ${paper.credibility.study_type}</span>
+                            ` : ''}
+                        </div>
+                        ${paper.url ? `<a href="${paper.url}" target="_blank" class="external-link"> View Paper</a>` : ''}
+                    </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- Source Chunks (toggleable) -->
+            ${data.evidence_chunks && data.evidence_chunks.length > 0 ? `
+            <div class="chunks-section toggleable-verify-section" id="chunks-section" style="display: none;">
+                <h3>Source Chunks (${data.evidence_chunks.length})</h3>
+                <div class="chunks-list">
+                    ${data.evidence_chunks.map(chunk => `
+                    <div class="chunk-card">
+                        <div class="chunk-text">${chunk.text}</div>
+                        <div class="chunk-meta">
+                            <strong>Source:</strong>
+                            <a href="/papers/${chunk.paper_id}" class="paper-link">${chunk.source}</a>
+                            ${chunk.section ? `• ${formatSourceBadge(chunk.section, chunk.page)}` : (chunk.page ? `• ${formatSourceBadge(null, chunk.page)}` : '')}
+                        </div>
+                    </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+        </div>
+        `;
+
+        agentResults.innerHTML = html;
+        agentResults.style.display = 'block';
+
+        // Render markdown in reasoning section
+        const reasoningDiv = agentResults.querySelector('.reasoning-text');
+        if (reasoningDiv && typeof marked !== 'undefined') {
+            reasoningDiv.innerHTML = marked.parse(result.reasoning);
+        } else if (reasoningDiv) {
+            reasoningDiv.textContent = result.reasoning;
+        }
+
+        agentResults.scrollIntoView({ behavior: 'smooth' });
+    }
+})();
+</script>
+{% endif %}
+
+<script>
+let eventSource = null;
+
+function toggleVerificationSystem() {
+    const verificationMode = document.querySelector('input[name="verification_mode"]:checked').value;
+    const traditionalOptions = document.getElementById('traditionalOptions');
+    const agentOptions = document.getElementById('agentOptions');
+
+    if (verificationMode === 'agent') {
+        traditionalOptions.style.display = 'none';
+        agentOptions.style.display = 'block';
+    } else {
+        traditionalOptions.style.display = 'block';
+        agentOptions.style.display = 'none';
+    }
+}
+
+function toggleMaxPapers() {
+    const searchMode = document.querySelector('input[name="search_mode"]:checked').value;
+    const maxPapersGroup = document.getElementById('maxPapersGroup');
+    const onlineSearchOptions = document.getElementById('onlineSearchOptions');
+    const onlineSearchEvaluation = document.getElementById('onlineSearchEvaluation');
+    const localSearchFullText = document.getElementById('localSearchFullText');
+
+    if (searchMode === 'with_search') {
+        maxPapersGroup.style.display = 'block';
+        onlineSearchOptions.style.display = 'block';
+        onlineSearchEvaluation.style.display = 'block';
+        localSearchFullText.style.display = 'none';
+    } else {
+        maxPapersGroup.style.display = 'none';
+        onlineSearchOptions.style.display = 'none';
+        onlineSearchEvaluation.style.display = 'none';
+        localSearchFullText.style.display = 'block';
+    }
+}
+
+function toggleVerifySection(sectionId) {
+    const allSections = document.querySelectorAll('.toggleable-verify-section');
+    const targetSection = document.getElementById(sectionId + '-section');
+    const allSummaryItems = document.querySelectorAll('.summary-item[data-section]');
+    const clickedItem = document.querySelector(`[data-section="${sectionId}"]`);
+    
+    if (!targetSection) return;
+    
+    // If clicking the same section, toggle it
+    if (targetSection.style.display === 'block') {
+        targetSection.style.display = 'none';
+        if (clickedItem) clickedItem.classList.remove('active');
+    } else {
+        // Hide all sections
+        allSections.forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        // Remove active class from all items
+        allSummaryItems.forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        // Show target section
+        targetSection.style.display = 'block';
+        if (clickedItem) clickedItem.classList.add('active');
+        
+        // Scroll to section
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function handleSubmit(event) {
+    // Clear previous results immediately
+    const previousResults = document.querySelector('.verification-results');
+    if (previousResults) {
+        previousResults.style.display = 'none';
+    }
+
+    const previousLogs = document.querySelector('.logs-section');
+    if (previousLogs) {
+        previousLogs.style.display = 'none';
+    }
+
+    const previousError = document.querySelector('.error-message');
+    if (previousError) {
+        previousError.style.display = 'none';
+    }
+
+    // Hide agent stream section if it exists
+    const agentStreamSection = document.getElementById('agentStreamSection');
+    if (agentStreamSection) {
+        agentStreamSection.style.display = 'none';
+    }
+
+    const agentResults = document.getElementById('agentResults');
+    if (agentResults) {
+        agentResults.style.display = 'none';
+    }
+
+    // Show loading section
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('verifyFormSection').style.display = 'none';
+
+    // Scroll to loading section
+    document.getElementById('loadingSection').scrollIntoView({ behavior: 'smooth' });
+
+    // Allow form to submit normally (page will reload with results)
+    return true;
+}
+</script>
+
+{% if error %}
+<div class="error-message">
+     {{ error }}
+    {% if error_details %}
+    <details class="error-details">
+        <summary>Show error details</summary>
+        <pre>{{ error_details }}</pre>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if logs %}
+<div class="logs-section">
+    <h3> Processing Logs</h3>
+    <div class="logs-container">
+        {% for log in logs %}
+        <div class="log-entry">{{ log }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if result %}
+<div class="verification-results">
+    <!-- Verdict -->
+    <div class="verdict-section">
+        <h3>Verdict</h3>
+        <div class="verdict-card verdict-{{ result.verdict.lower().replace('_', '-') }}">
+            {% if result.verdict == "SUPPORTS" %}
+                <span class="verdict-icon"></span>
+            {% elif result.verdict == "REFUTES" %}
+                <span class="verdict-icon"></span>
+            {% else %}
+                <span class="verdict-icon">❓</span>
+            {% endif %}
+            <span class="verdict-text">{{ result.verdict.replace('_', ' ') }}</span>
+        </div>
+    </div>
+
+    <!-- Confidence -->
+    <div class="confidence-section">
+        <h3>Confidence Level</h3>
+        <div class="confidence-card">
+            <div class="confidence-value">{{ "%.1f"|format(result.confidence) }}/10</div>
+            <div class="confidence-bar">
+                <div class="confidence-fill" style="width: {{ result.confidence * 10 }}%"></div>
+            </div>
+        </div>
+        {% if confidence_interpretation %}
+        <div class="confidence-interpretation confidence-level-{{ confidence_level }}">
+            <p class="interpretation-text"> {{ confidence_interpretation }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Reasoning -->
+    <div class="reasoning-section">
+        <h3>Reasoning</h3>
+        <div class="reasoning-text markdown-content" id="agentlessReasoning">{{ result.reasoning }}</div>
+    </div>
+
+    <!-- Evidence Summary -->
+    <div class="evidence-summary">
+        <h3>Evidence Summary</h3>
+        <p class="subtitle">Click to expand and view details</p>
+        <div class="summary-stats clickable">
+            <div class="summary-item" onclick="toggleVerifySection('evidence')" data-section="evidence">
+                <strong>{{ result.evidence|length }}</strong>
+                <span>Propositions Used</span>
+            </div>
+            <div class="summary-item" onclick="toggleVerifySection('sources')" data-section="sources">
+                <strong>{{ evidence_papers|length }}</strong>
+                <span>Source Papers</span>
+            </div>
+            {% if logs %}
+            <div class="summary-item">
+                <strong>{{ logs|length }}</strong>
+                <span>Processing Steps</span>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Evidence Propositions (toggleable) -->
+    <div class="evidence-section toggleable-verify-section" id="evidence-section" style="display: none;">
+        <h3>Evidence Propositions ({{ result.evidence|length }})</h3>
+        <div class="evidence-list">
+            {% for prop in result.evidence %}
+            <div class="evidence-item">
+                <a href="/propositions/{{ prop.prop_id }}" class="evidence-link">
+                    <div class="evidence-text">{{ prop.text }}</div>
+                </a>
+                
+                <div class="evidence-meta">
+                    <strong>Source:</strong>
+                    <a href="/papers/{{ prop.paper_id }}" class="paper-link">{{ prop.source }}</a>
+                    • {{ format_source_badge(prop.chunk_id | get_chunk_section, prop.page) | safe }}
+                </div>
+
+                {% if prop.evaluation %}
+                <div class="quality-scores-inline">
+                    <span class="score-item">Accuracy: {{ prop.evaluation.accuracy }}/10</span>
+                    <span class="score-item">Clarity: {{ prop.evaluation.clarity }}/10</span>
+                    <span class="score-item">Completeness: {{ prop.evaluation.completeness }}/10</span>
+                    <span class="score-item">Conciseness: {{ prop.evaluation.conciseness }}/10</span>
+                    <span class="score-item average">Avg: {{ "%.1f"|format(prop.evaluation.average_score()) }}/10</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Source Papers (toggleable) -->
+    {% if evidence_papers %}
+    <div class="sources-section toggleable-verify-section" id="sources-section" style="display: none;">
+        <h3>Source Papers ({{ evidence_papers|length }})</h3>
+        <div class="sources-list">
+            {% for paper in evidence_papers %}
+            <div class="source-card">
+                <a href="/papers/{{ paper.id }}" class="source-title">{{ paper.title }}</a>
+                <div class="source-meta">
+                    <span>📅 {{ paper.year or "Unknown" }}</span>
+                    <span> {{ paper.citations or 0 }} citations</span>
+                    {% if paper.credibility %}
+                    <span>★ {{ "%.1f"|format(paper.credibility.rating) }}/5</span>
+                    <span> {{ paper.credibility.study_type }}</span>
+                    {% endif %}
+                </div>
+                {% if paper.url %}
+                <a href="{{ paper.url }}" target="_blank" class="external-link"> View Paper</a>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Render markdown in reasoning section for agentless mode
+document.addEventListener('DOMContentLoaded', function() {
+    const reasoningDiv = document.getElementById('agentlessReasoning');
+    if (reasoningDiv && typeof marked !== 'undefined') {
+        const reasoningText = reasoningDiv.textContent;
+        reasoningDiv.innerHTML = marked.parse(reasoningText);
+    }
+});
+</script>
+{% endif %}
+{% endblock %}

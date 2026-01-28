@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}Visualization{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Visualization</h1>
+    <p>Visualize the temporal distribution and similarity of propositions related to your query.</p>
+
+    {% if kb_stats %}
+    <div class="kb-status">
+        <span class="status-item">Knowledge Base: {{ kb_stats.papers }} papers</span>
+        <span class="status-item">{{ kb_stats.propositions_quality }} quality propositions</span>
+    </div>
+    {% endif %}
+</div>
+
+<div class="verify-form-section">
+    <form method="post" action="/visualize">
+        <div class="form-group">
+            <label for="query">Enter a proposition:</label>
+            <textarea
+                name="query"
+                id="query"
+                rows="4"
+                class="claim-input"
+                placeholder="E.g., 'Regular exercise reduces the risk of cardiovascular disease'"
+                required
+            >{{ query if query else '' }}</textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="top_k">Number of propositions to analyze:</label>
+            <input
+                type="number"
+                name="top_k"
+                id="top_k"
+                value="{{ top_k or 100 }}"
+                min="10"
+                max="2000"
+                step="10"
+                class="number-input"
+            />
+            <small>Higher values provide more comprehensive analysis but take longer to process</small>
+        </div>
+
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="quality_only" id="quality_only" {% if quality_only %}checked{% endif %}>
+                Use Quality Propositions Only
+            </label>
+            <small>Analyze only high-quality propositions (recommended for better insights)</small>
+        </div>
+
+        <button type="submit" class="verify-button-submit">Generate Visualization</button>
+    </form>
+</div>
+
+{% if error %}
+<div class="error-message">
+    <p>{{ error }}</p>
+</div>
+{% endif %}
+
+{% if timeline_html %}
+<div class="verification-results">
+    <div class="info-box" style="background-color: #f0f7ff; border-left: 4px solid #2196f3; padding: 14px 18px; margin-bottom: 20px; border-radius: 4px;">
+        <p style="margin: 0; font-size: 0.9em; line-height: 1.6;">
+            <strong>Understanding Similarity Scores:</strong> All visualizations use semantic similarity (0.0-1.0) calculated as <code>1/(1+distance)</code> where distance is the L2 distance between embedding vectors.
+            Higher scores mean propositions are semantically closer to your query. Color coding: <span style="color: #dc3545; font-weight: 600;">Red (0.0-0.5)</span> = low similarity,
+            <span style="color: #ffc107; font-weight: 600;">Yellow (~0.5)</span> = moderate, <span style="color: #28a745; font-weight: 600;">Green (0.5-1.0)</span> = high similarity.
+            This measures meaning alignment, not factual correctness.
+        </p>
+    </div>
+
+    <div class="viz-tabs">
+        <button class="viz-tab active" onclick="showVizTab('timeline')">Timeline</button>
+        <button class="viz-tab" onclick="showVizTab('cumulative')">Cumulative</button>
+        <button class="viz-tab" onclick="showVizTab('heatmap')">Top Papers</button>
+    </div>
+
+    <div class="viz-content">
+        <div id="timeline-viz" class="viz-panel active">
+            <div class="chart-container">
+                {{ timeline_html | safe }}
+            </div>
+        </div>
+
+        <div id="cumulative-viz" class="viz-panel">
+            <div class="chart-container">
+                {{ cumulative_html | safe }}
+            </div>
+        </div>
+
+        <div id="heatmap-viz" class="viz-panel">
+            <div class="chart-container">
+                {{ heatmap_html | safe }}
+            </div>
+        </div>
+    </div>
+
+    {% if year_data %}
+    <div class="year-details">
+        <h3>Year-by-Year Breakdown</h3>
+        <p class="subtitle">Click on "View Propositions" to see all propositions from each year</p>
+        <table class="year-table">
+            <thead>
+                <tr>
+                    <th>Year</th>
+                    <th>Propositions</th>
+                    <th>Avg Similarity</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for year in year_data | sort %}
+                <tr>
+                    <td>{{ year }}</td>
+                    <td>{{ year_data[year].count }}</td>
+                    <td>{{ "%.3f" | format(year_data[year].avg_similarity) }}</td>
+                    <td>
+                        <button class="view-year-props-btn" onclick="toggleYearPropositions('year-{{ year }}')">View Propositions</button>
+                    </td>
+                </tr>
+                <tr id="year-{{ year }}-props" class="year-props-row" style="display: none;">
+                    <td colspan="4">
+                        <div class="year-props-container">
+                            <h4>Propositions from {{ year }} ({{ year_data[year].count }} total)</h4>
+                            <div class="evidence-list">
+                                {% for prop, score in year_data[year].propositions %}
+                                <div class="evidence-item">
+                                    <a href="/propositions/{{ prop.prop_id }}" class="evidence-link">
+                                        <div class="evidence-text">{{ prop.text }}</div>
+                                    </a>
+                                    <div class="evidence-meta">
+                                        <strong>Similarity:</strong> {{ "%.3f" | format(score) }} |
+                                        <strong>Quality:</strong> {{ prop.quality }} |
+                                        <strong>Source:</strong> <a href="/papers/{{ prop.paper_id }}" class="paper-link">{{ prop.source }}</a>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if summary %}
+    <div class="evidence-summary">
+        <h3>Summary Statistics</h3>
+        <p class="subtitle">Click to expand and view details</p>
+        <div class="summary-stats clickable">
+            <div class="summary-item" onclick="toggleTimelineSection('propositions')" data-section="propositions">
+                <strong>{{ summary.total_propositions }}</strong>
+                <span>Propositions Used</span>
+            </div>
+            <div class="summary-item" onclick="toggleTimelineSection('sources')" data-section="sources">
+                <strong>{{ source_papers|length if source_papers else 0 }}</strong>
+                <span>Source Papers</span>
+            </div>
+            <div class="summary-item">
+                <strong>{{ summary.years_covered }}</strong>
+                <span>Years Covered ({{ summary.year_range }})</span>
+            </div>
+            <div class="summary-item">
+                <strong>{{ summary.peak_year }}</strong>
+                <span>Peak Year (most propositions)</span>
+            </div>
+            <div class="summary-item">
+                <strong>{{ summary.most_similar_year }}</strong>
+                <span>Most Similar Year</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if propositions %}
+    <div class="evidence-section toggleable-verify-section" id="propositions-section" style="display: none;">
+        <h3>Propositions Used ({{ propositions|length }})</h3>
+        <div class="evidence-list">
+            {% for prop, score in propositions %}
+            <div class="evidence-item">
+                <a href="/propositions/{{ prop.prop_id }}" class="evidence-link">
+                    <div class="evidence-text">{{ prop.text }}</div>
+                </a>
+                <div class="evidence-meta">
+                    <strong>Similarity:</strong> {{ "%.3f" | format(score) }} |
+                    <strong>Quality:</strong> {{ prop.quality }} |
+                    <strong>Source:</strong> <a href="/papers/{{ prop.paper_id }}" class="paper-link">{{ prop.source }}</a>
+                    {% if papers and prop.paper_id in papers and papers[prop.paper_id].year %}
+                    | <strong>Year:</strong> {{ papers[prop.paper_id].year }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if source_papers %}
+    <div class="sources-section toggleable-verify-section" id="sources-section" style="display: none;">
+        <h3>Source Papers ({{ source_papers|length }})</h3>
+        <div class="sources-list">
+            {% for paper in source_papers %}
+            <div class="source-card">
+                <a href="/papers/{{ paper.paper_id }}" class="source-title">{{ paper.title }}</a>
+                <div class="source-meta">
+                    {% if paper.authors %}
+                    <span>{{ paper.authors }}</span>
+                    {% endif %}
+                    {% if paper.year %}
+                    <span>{{ paper.year }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<style>
+.viz-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.viz-tab {
+    background: none;
+    border: none;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.viz-tab:hover {
+    color: #333;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.viz-tab.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+}
+
+.viz-content {
+    position: relative;
+    min-height: 500px;
+}
+
+.viz-panel {
+    display: none;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.viz-panel.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chart-container {
+    margin-bottom: 30px;
+}
+
+.view-year-props-btn {
+    background-color: #007bff;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background-color 0.2s;
+}
+
+.view-year-props-btn:hover {
+    background-color: #0056b3;
+}
+
+.year-props-row {
+    background-color: #f8f9fa;
+}
+
+.year-props-container {
+    padding: 15px;
+}
+
+.year-props-container h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #333;
+}
+</style>
+
+<script>
+function showVizTab(tabName) {
+    const tabs = document.querySelectorAll('.viz-tab');
+    const panels = document.querySelectorAll('.viz-panel');
+
+    tabs.forEach(tab => tab.classList.remove('active'));
+    panels.forEach(panel => panel.classList.remove('active'));
+
+    const activeTab = Array.from(tabs).find(tab =>
+        tab.textContent.toLowerCase().includes(tabName.toLowerCase())
+    );
+    const activePanel = document.getElementById(tabName + '-viz');
+
+    if (activeTab) activeTab.classList.add('active');
+    if (activePanel) activePanel.classList.add('active');
+}
+
+function toggleTimelineSection(sectionId) {
+    const allSections = document.querySelectorAll('.toggleable-verify-section');
+    const targetSection = document.getElementById(sectionId + '-section');
+    const allSummaryItems = document.querySelectorAll('.summary-item[data-section]');
+    const clickedItem = document.querySelector(`[data-section="${sectionId}"]`);
+
+    if (!targetSection) return;
+
+    if (targetSection.style.display === 'block') {
+        targetSection.style.display = 'none';
+        if (clickedItem) clickedItem.classList.remove('active');
+    } else {
+        allSections.forEach(section => {
+            section.style.display = 'none';
+        });
+
+        allSummaryItems.forEach(item => {
+            item.classList.remove('active');
+        });
+
+        targetSection.style.display = 'block';
+        if (clickedItem) clickedItem.classList.add('active');
+
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+function toggleYearPropositions(yearId) {
+    const propsRow = document.getElementById(yearId + '-props');
+    const button = event.target;
+    
+    if (propsRow.style.display === 'none' || propsRow.style.display === '') {
+        propsRow.style.display = 'table-row';
+        button.textContent = 'Hide Propositions';
+    } else {
+        propsRow.style.display = 'none';
+        button.textContent = 'View Propositions';
+    }
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Scientific Claim Verification System{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <h1 class="nav-title"> Scientific Claim Verification</h1>
+            <ul class="nav-links">
+                <li><a href="/papers" class="{% if request.url.path.startswith('/papers') %}active{% endif %}"> Papers</a></li>
+                <li><a href="/propositions" class="{% if request.url.path == '/propositions' %}active{% endif %}"> Propositions</a></li>
+                <li><a href="/chunks" class="{% if request.url.path == '/chunks' %}active{% endif %}"> Chunks</a></li>
+                <li><a href="/visualize" class="{% if request.url.path == '/visualize' %}active{% endif %}"> Visualization</a></li>
+                <li><a href="/qa" class="{% if request.url.path == '/qa' %}active{% endif %}">Ask Questions</a></li>
+                <li><a href="/verify" class="{% if request.url.path == '/verify' %}active{% endif %}"> Verify Claim</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>Scientific Claim Verification System</p>
+    </footer>
+</body>
+</html>

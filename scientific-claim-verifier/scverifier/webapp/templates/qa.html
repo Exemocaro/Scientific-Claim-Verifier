@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Ask Questions - Scientific Claim Verification{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2>Ask Questions</h2>
+    <p class="subtitle">Query the knowledge base with natural language questions and get AI-generated answers</p>
+    {% if kb_stats %}
+    <div class="kb-status">
+        <span class="status-item"> Knowledge Base: {{ kb_stats.papers }} papers</span>
+        <span class="status-item"> {{ kb_stats.propositions_quality }} quality propositions</span>
+        <span class="status-item"> {{ kb_stats.propositions_total }} total propositions</span>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Q&A Form -->
+<div class="verify-form-section" id="qaFormSection">
+    <form method="post" action="/qa" class="verify-form" id="qaForm" onsubmit="return handleSubmit(event)">
+        <div class="form-group">
+            <label for="question">Your Question:</label>
+            <textarea 
+                name="question" 
+                id="question" 
+                rows="4" 
+                placeholder="e.g., What are the main causes of climate change? How does machine learning work?"
+                class="claim-input"
+                required
+            >{{ question or '' }}</textarea>
+        </div>
+        
+        <div class="form-group">
+            <label>Retrieval Mode:</label>
+            <div class="toggle-group">
+                <input type="radio" name="retrieval_mode" id="mode_propositions" value="propositions" {% if not retrieval_mode or retrieval_mode == 'propositions' %}checked{% endif %}>
+                <label for="mode_propositions" class="toggle-button">
+                    <span class="button-icon"></span>
+                    <span class="button-content">
+                        <strong>Quality Propositions</strong>
+                        <small>Use high-quality extracted claims (Recommended)</small>
+                    </span>
+                </label>
+                
+                <input type="radio" name="retrieval_mode" id="mode_all_propositions" value="all_propositions" {% if retrieval_mode == 'all_propositions' %}checked{% endif %}>
+                <label for="mode_all_propositions" class="toggle-button">
+                    <span class="button-icon"></span>
+                    <span class="button-content">
+                        <strong>All Propositions</strong>
+                        <small>Include all extracted propositions</small>
+                    </span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="max_results">Number of Propositions to Retrieve:</label>
+            <input 
+                type="number" 
+                name="max_results" 
+                id="max_results" 
+                value="{{ max_results or 5 }}" 
+                min="1"
+                class="number-input"
+            />
+            <small>More sources provide more context but take slightly longer</small>
+        </div>
+        
+        <button type="submit" class="verify-button-submit"> Ask Question</button>
+    </form>
+</div>
+
+<!-- Loading Animation -->
+<div id="loadingSection" class="loading-section" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p class="loading-text">Processing your question...</p>
+</div>
+
+<script>
+function handleSubmit(event) {
+    // Clear previous results
+    const previousResults = document.querySelector('.verification-results');
+    if (previousResults) {
+        previousResults.style.display = 'none';
+    }
+    
+    const previousError = document.querySelector('.error-message');
+    if (previousError) {
+        previousError.style.display = 'none';
+    }
+    
+    // Show loading section
+    document.getElementById('loadingSection').style.display = 'block';
+    document.getElementById('qaFormSection').style.display = 'none';
+    
+    // Scroll to loading section
+    document.getElementById('loadingSection').scrollIntoView({ behavior: 'smooth' });
+    
+    // Allow form to submit normally
+    return true;
+}
+
+function toggleQASection(sectionId) {
+    const allSections = document.querySelectorAll('.toggleable-verify-section');
+    const targetSection = document.getElementById(sectionId + '-section');
+    const allSummaryItems = document.querySelectorAll('.summary-item[data-section]');
+    const clickedItem = document.querySelector(`[data-section="${sectionId}"]`);
+    
+    if (!targetSection) return;
+    
+    // If clicking the same section, toggle it
+    if (targetSection.style.display === 'block') {
+        targetSection.style.display = 'none';
+        if (clickedItem) clickedItem.classList.remove('active');
+    } else {
+        // Hide all sections
+        allSections.forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        // Remove active class from all items
+        allSummaryItems.forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        // Show target section
+        targetSection.style.display = 'block';
+        if (clickedItem) clickedItem.classList.add('active');
+        
+        // Scroll to section
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+</script>
+
+{% if error %}
+<div class="error-message">
+     {{ error }}
+    {% if error_details %}
+    <details class="error-details">
+        <summary>Show error details</summary>
+        <pre>{{ error_details }}</pre>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if answer %}
+<div class="verification-results">
+    <!-- Question Display -->
+    <div class="verdict-section">
+        <h3>Question</h3>
+        <p class="reasoning-text">{{ question }}</p>
+    </div>
+
+    <!-- Answer -->
+    <div class="reasoning-section">
+        <h3>Answer</h3>
+        <p class="reasoning-text">{{ answer }}</p>
+    </div>
+
+    <!-- Evidence Summary -->
+    <div class="evidence-summary">
+        <h3>Evidence Summary</h3>
+        <p class="subtitle">Click to expand and view details</p>
+        <div class="summary-stats clickable">
+            <div class="summary-item" onclick="toggleQASection('sources')" data-section="sources">
+                <strong>{{ sources|length }}</strong>
+                <span>Sources Used</span>
+            </div>
+            <div class="summary-item" onclick="toggleQASection('propositions')" data-section="propositions">
+                <strong>{{ sources|length }}</strong>
+                <span>Propositions</span>
+            </div>
+            <div class="summary-item">
+                <strong>{{ retrieval_mode|replace('_', ' ')|title }}</strong>
+                <span>Retrieval Mode</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Source Papers (toggleable) -->
+    {% if sources %}
+    <div class="sources-section toggleable-verify-section" id="sources-section" style="display: none;">
+        <h3>Source Papers ({{ sources|length }})</h3>
+        <div class="sources-list">
+            {% for source in sources %}
+            <div class="source-card">
+                <a href="/papers/{{ source.paper_id }}" class="source-title">{{ source.source }}</a>
+                <div class="source-meta">
+                    {{ format_source_badge(source.chunk_id | get_chunk_section, source.page) | safe }}
+                    <span> Chunk ID: {{ source.chunk_id }}</span>
+                </div>
+                <a href="/chunks/{{ source.paper_id }}/{{ source.chunk_id }}" class="external-link"> View Full Context</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Propositions (toggleable) -->
+    {% if sources %}
+    <div class="evidence-section toggleable-verify-section" id="propositions-section" style="display: none;">
+        <h3>Propositions Used ({{ sources|length }})</h3>
+        <div class="evidence-list">
+            {% for source in sources %}
+            <div class="evidence-item">
+                <a href="/chunks/{{ source.paper_id }}/{{ source.chunk_id }}" class="evidence-link">
+                    <div class="evidence-text">{{ source.content }}</div>
+                </a>
+                
+                <div class="evidence-meta">
+                    <strong>Source:</strong>
+                    <a href="/papers/{{ source.paper_id }}" class="paper-link">{{ source.source }}</a>
+                    - {{ format_source_badge(source.chunk_id | get_chunk_section, source.page) | safe }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

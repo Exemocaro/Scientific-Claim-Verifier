@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Chunk Details{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="/papers/{{ paper.id }}" class="back-link">← Back to Paper</a>
+    <h2> Chunk Details</h2>
+</div>
+
+<div class="proposition-detail-container">
+    <!-- Source Chunk -->
+    <section class="detail-section">
+        <h3> Chunk Information</h3>
+        <div class="chunk-display">
+            <div class="chunk-header">
+                <strong>{{ chunk.chunk_id }}</strong>
+                {{ format_source_badge(chunk.section, chunk.page) | safe }}
+            </div>
+            <div class="chunk-text-display">{{ chunk.text }}</div>
+            <div class="chunk-stats">
+                <span class="stat-badge">Length: {{ chunk.text|length }} characters</span>
+                <span class="stat-badge">Propositions: {{ propositions|length }}</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- All Propositions from this chunk -->
+    <section class="detail-section">
+        <h3> Propositions from this Chunk ({{ propositions|length }})</h3>
+        
+        {% if propositions %}
+        <div class="propositions-list">
+            {% for prop in propositions %}
+            <div class="proposition-card {% if prop.is_high_quality() %}quality-pass{% else %}quality-fail{% endif %}">
+                <div class="prop-status">
+                    {% if prop.is_high_quality() %}
+                    <span class="status-badge pass"> Quality</span>
+                    {% else %}
+                    <span class="status-badge fail"> Low Quality</span>
+                    {% endif %}
+                </div>
+                
+                <a href="/propositions/{{ prop.prop_id }}" class="prop-link-inline">
+                    <div class="prop-text">{{ prop.text }}</div>
+                </a>
+                
+                {% if prop.evaluation %}
+                <div class="quality-scores-detailed">
+                    <h4>Quality Evaluation Scores:</h4>
+                    <div class="scores-grid">
+                        <div class="score-item">
+                            <span class="score-label">Accuracy</span>
+                            <span class="score-value">{{ prop.evaluation.accuracy }}/10</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: {{ prop.evaluation.accuracy * 10 }}%"></div>
+                            </div>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Clarity</span>
+                            <span class="score-value">{{ prop.evaluation.clarity }}/10</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: {{ prop.evaluation.clarity * 10 }}%"></div>
+                            </div>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Completeness</span>
+                            <span class="score-value">{{ prop.evaluation.completeness }}/10</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: {{ prop.evaluation.completeness * 10 }}%"></div>
+                            </div>
+                        </div>
+                        <div class="score-item">
+                            <span class="score-label">Conciseness</span>
+                            <span class="score-value">{{ prop.evaluation.conciseness }}/10</span>
+                            <div class="score-bar">
+                                <div class="score-fill" style="width: {{ prop.evaluation.conciseness * 10 }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="average-score">
+                        <strong>Average Score:</strong> {{ "%.1f"|format(prop.evaluation.average_score()) }}/10
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-message">No propositions extracted from this chunk.</p>
+        {% endif %}
+    </section>
+
+    <!-- Similar Chunks -->
+    <section class="detail-section">
+        <h3> Similar Chunks</h3>
+        <p class="subtitle" style="margin-bottom: 12px;">Chunks with similar content based on semantic similarity</p>
+        <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.9em; line-height: 1.5;">
+                <strong>About similarity scores:</strong> The "% match" represents semantic similarity between chunk embeddings.
+                90-100% = near-identical content, 70-90% = strong topical overlap, 50-70% = related sections, &lt;50% = weakly related.
+                This measures content alignment, not factual agreement.
+            </p>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <label for="similar-chunks-count" style="font-weight: 500;">Number of chunks:</label>
+            <input
+                type="number"
+                id="similar-chunks-count"
+                value="5"
+                min="1"
+                max="20"
+                class="number-input"
+                style="width: 80px;"
+            />
+            <button class="action-btn" onclick="loadSimilarChunks()" id="load-similar-btn" style="background-color: #2196f3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                See Similar Chunks
+            </button>
+        </div>
+        <div id="similar-chunks-container" style="display: none; margin-top: 20px;">
+            <div id="similar-chunks-list"></div>
+        </div>
+    </section>
+
+    <!-- Source Paper -->
+    <section class="detail-section">
+        <h3> Source Paper</h3>
+        <div class="paper-info-card">
+            <a href="/papers/{{ paper.id }}" class="paper-title-link">
+                <h4>{{ paper.title }}</h4>
+            </a>
+            
+            <div class="paper-meta-grid">
+                {% if paper.doi %}
+                <div class="meta-item">
+                    <strong>DOI:</strong> {{ paper.doi }}
+                </div>
+                {% endif %}
+                <div class="meta-item">
+                    <strong>Year:</strong> {{ paper.year or "Unknown" }}
+                </div>
+                <div class="meta-item">
+                    <strong>Citations:</strong> {{ paper.citations or 0 }}
+                </div>
+                <div class="meta-item">
+                    <strong>Source:</strong> {{ paper.source }}
+                </div>
+                {% if paper.credibility %}
+                <div class="meta-item">
+                    <strong>Credibility:</strong> {{ "%.1f"|format(paper.credibility.rating) }}/5 ★
+                </div>
+                <div class="meta-item">
+                    <strong>Study Type:</strong> {{ paper.credibility.study_type }}
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="paper-links">
+                <a href="/papers/{{ paper.id }}" class="external-link"> View Full Paper Details</a>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+function formatSourceBadge(section, page) {
+    const parts = [];
+    if (section && section.trim()) {
+        parts.push(`Section: ${section}`);
+    }
+    if (page) {
+        parts.push(`Page: ${page}`);
+    }
+    return parts.join(' • ') || 'No source info';
+}
+
+async function loadSimilarChunks() {
+    const btn = document.getElementById('load-similar-btn');
+    const container = document.getElementById('similar-chunks-container');
+    const list = document.getElementById('similar-chunks-list');
+    const countInput = document.getElementById('similar-chunks-count');
+    const topK = countInput.value || 5;
+
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+        const chunkId = '{{ chunk.chunk_id }}';
+        if (!chunkId || chunkId.startsWith('{')) {
+            alert('Error: Could not determine chunk ID');
+            btn.textContent = 'See Similar Chunks';
+            return;
+        }
+        const response = await fetch(`/api/chunks/${chunkId}/similar?top_k=${topK}`);
+        const result = await response.json();
+
+        if (response.ok && result.similar_chunks) {
+            if (result.similar_chunks.length === 0) {
+                list.innerHTML = '<p class="empty-message">No similar chunks found.</p>';
+            } else {
+                let html = '<div class="similar-chunks-grid">';
+                result.similar_chunks.forEach(chunk => {
+                    html += `
+                        <div class="similar-chunk-card" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #fafafa;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <div style="flex: 1;">
+                                    <a href="${chunk.url}" style="font-weight: 600; color: #1976d2; text-decoration: none; display: block; margin-bottom: 8px;">
+                                        ${chunk.text.substring(0, 200)}${chunk.text.length > 200 ? '...' : ''}
+                                    </a>
+                                    <div style="font-size: 0.85em; color: #666; margin-top: 8px;">
+                                        from <a href="/papers/${chunk.paper_id}" style="color: #1976d2; text-decoration: none;">${chunk.paper_title}</a>
+                                    </div>
+                                </div>
+                                <span style="background-color: #e3f2fd; color: #1976d2; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; white-space: nowrap; margin-left: 12px;">
+                                    ${(chunk.similarity_score * 100).toFixed(1)}% match
+                                </span>
+                            </div>
+                            <div style="font-size: 0.85em; color: #888; margin-top: 8px;">
+                                Chunk: ${chunk.id} • ${formatSourceBadge(chunk.section, chunk.page)}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                list.innerHTML = html;
+            }
+            container.style.display = 'block';
+            btn.textContent = 'Refresh Similar Chunks';
+        } else {
+            alert('Error loading similar chunks');
+            btn.textContent = 'See Similar Chunks';
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        btn.textContent = 'See Similar Chunks';
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

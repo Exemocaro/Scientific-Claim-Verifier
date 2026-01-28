@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Propositions - Scientific Claim Verification{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2> Propositions</h2>
+    <p class="subtitle">Search and explore extracted propositions</p>
+</div>
+
+<!-- Search and Filter Section -->
+<div class="search-section">
+    <div class="search-filter-row">
+        <form method="post" action="/propositions/search" class="search-form">
+            <input 
+                type="text" 
+                name="query" 
+                placeholder="Enter a proposition to find similar ones..." 
+                value="{{ query or '' }}"
+                class="search-input"
+                required
+            />
+            <button type="submit" class="search-button"> Search</button>
+        </form>
+        
+        {% if not query %}
+        <div class="filter-section-inline">
+            <form method="get" action="/propositions" class="filter-form">
+                <label for="filter">Show:</label>
+                <select name="filter" id="filter" onchange="this.form.submit()" class="filter-select">
+                    <option value="quality" {% if filter_mode == 'quality' or not filter_mode %}selected{% endif %}>Quality Only</option>
+                    <option value="all" {% if filter_mode == 'all' %}selected{% endif %}>All</option>
+                </select>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if error %}
+<div class="error-message">
+     {{ error }}
+</div>
+{% endif %}
+
+{% if query %}
+<div class="results-header">
+    <h3>Search Results for: "{{ query }}"</h3>
+    <p>Found {{ total }} matching propositions</p>
+</div>
+{% else %}
+<div class="results-header">
+    <h3>{% if filter_mode == 'all' %}All Propositions{% else %}Quality Propositions{% endif %}</h3>
+    <p>Showing {{ total }} propositions</p>
+</div>
+{% endif %}
+
+{% if propositions %}
+<div class="propositions-list-compact">
+    {% for prop in propositions %}
+    <div class="proposition-item-compact">
+        <a href="/propositions/{{ prop.prop_id }}" class="prop-link-inline">
+            <div class="prop-text">
+                {% if prop.is_high_quality() %}{% else %}{% endif %}
+                {{ prop.text }}
+            </div>
+        </a>
+        
+        <div class="prop-meta-compact">
+            <span class="meta-item">
+                <strong>Source:</strong>
+                <a href="/papers/{{ prop.id }}" class="paper-link">{{ prop.source }}</a>
+            </span>
+            <span class="meta-badge">{{ prop.chunk_id }}</span>
+            {{ format_source_badge(prop.chunk_id | get_chunk_section, prop.page) | safe }}
+        </div>
+        
+        {% if prop.evaluation %}
+        <div class="quality-scores-inline">
+            <span class="score-item">Accuracy: {{ prop.evaluation.accuracy }}/10</span>
+            <span class="score-item">Clarity: {{ prop.evaluation.clarity }}/10</span>
+            <span class="score-item">Completeness: {{ prop.evaluation.completeness }}/10</span>
+            <span class="score-item">Conciseness: {{ prop.evaluation.conciseness }}/10</span>
+            <span class="score-item average">Avg: {{ "%.1f"|format(prop.evaluation.average_score()) }}/10</span>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    {% if query %}
+    <p>No propositions found matching your query.</p>
+    <p>Try a different search term.</p>
+    {% else %}
+    <p>No propositions available in the knowledge base.</p>
+    <p>Run the extraction pipeline to add papers and propositions.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if pagination and pagination.total_pages > 1 and not query %}
+<div class="pagination-container">
+    <div class="pagination-info">
+        Page {{ pagination.current_page }} of {{ pagination.total_pages }}
+        <span class="item-count">({{ pagination.item_start }}-{{ pagination.item_end }})</span>
+    </div>
+
+    <div class="pagination-controls">
+        {% if pagination.has_prev %}
+            <a href="/propositions?page={{ pagination.prev_page }}{% if filter_mode != 'quality' %}&filter={{ filter_mode }}{% endif %}"
+               class="pagination-btn pagination-prev">
+                Previous
+            </a>
+        {% else %}
+            <span class="pagination-btn pagination-disabled">Previous</span>
+        {% endif %}
+
+        {% if pagination.has_next %}
+            <a href="/propositions?page={{ pagination.next_page }}{% if filter_mode != 'quality' %}&filter={{ filter_mode }}{% endif %}"
+               class="pagination-btn pagination-next">
+                Next
+            </a>
+        {% else %}
+            <span class="pagination-btn pagination-disabled">Next</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

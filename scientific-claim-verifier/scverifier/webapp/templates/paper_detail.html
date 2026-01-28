@@ -1,0 +1,843 @@
+{% extends "base.html" %}
+
+{% block title %}{{ paper.title }} - Paper Details{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <a href="/papers" class="back-link">Back to Papers</a>
+    <h2> {{ paper.title }}</h2>
+</div>
+
+<div class="paper-detail">
+    <!-- Paper Metadata -->
+    <section class="detail-section">
+        <h3> Paper Information</h3>
+        <div class="info-grid">
+            {% if paper.doi %}
+            <div class="info-item">
+                <strong>DOI:</strong> {{ paper.doi }}
+            </div>
+            {% endif %}
+            <div class="info-item">
+                <strong>Year:</strong> {{ paper.year or "Unknown" }}
+            </div>
+            <div class="info-item">
+                <strong>Citations:</strong> {{ paper.citations or 0 }}
+            </div>
+            <div class="info-item">
+                <strong>Source:</strong> {{ paper.source }}
+            </div>
+            {% if paper.credibility %}
+            <div class="info-item">
+                <strong>Credibility:</strong> {{ "%.1f"|format(paper.credibility.rating) }}/5 ★
+                <details style="margin-top: 8px; font-size: 0.9em;">
+                    <summary style="cursor: pointer; color: #1976d2;">Show breakdown</summary>
+                    <div style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            {% set base_score = paper.credibility.rating - paper.credibility.citation_bonus - paper.credibility.open_access_bonus - paper.credibility.fulltext_content_bonus + paper.credibility.recency_penalty %}
+                            <div>Base Score ({{ paper.credibility.study_type.replace('_', ' ').title() }}): {{ "%.1f"|format(base_score) }}</div>
+                            {% if paper.credibility.citation_bonus > 0 %}
+                            <div>+ Citation Bonus: +{{ "%.2f"|format(paper.credibility.citation_bonus) }}</div>
+                            {% endif %}
+                            {% if paper.credibility.open_access_bonus > 0 %}
+                            <div>+ Open Access Bonus: +{{ "%.1f"|format(paper.credibility.open_access_bonus) }}</div>
+                            {% endif %}
+                            {% if paper.credibility.fulltext_content_bonus > 0 %}
+                            <div>+ Full Text Content Bonus: +{{ "%.1f"|format(paper.credibility.fulltext_content_bonus) }}</div>
+                            {% endif %}
+                            {% if paper.credibility.recency_penalty > 0 %}
+                            <div>- Age Penalty: -{{ "%.1f"|format(paper.credibility.recency_penalty) }}</div>
+                            {% endif %}
+                            <div style="border-top: 1px solid #ccc; padding-top: 4px; margin-top: 4px;">
+                                <strong>Evidence Type:</strong> {{ paper.credibility.evidence_type|capitalize }}
+                            </div>
+                            <div style="border-top: 1px solid #ccc; padding-top: 4px; margin-top: 4px; font-weight: 500;">
+                                Final Rating: {{ "%.1f"|format(paper.credibility.rating) }}/5
+                            </div>
+                        </div>
+                    </div>
+                </details>
+            </div>
+            {% endif %}
+            {% if paper.pmc_id %}
+            <div class="info-item">
+                <strong>PMC ID:</strong> {{ paper.pmc_id }}
+            </div>
+            {% endif %}
+        </div>
+        
+        {% if paper.authors %}
+        <div class="authors-section">
+            <strong>Authors:</strong> {{ paper.authors|join(", ") }}
+        </div>
+        {% endif %}
+        
+        {% if paper.url %}
+        <div class="links-section">
+            <a href="{{ paper.url }}" target="_blank" class="external-link"> View Paper</a>
+            {% if paper.pdf_url %}
+            <a href="{{ paper.pdf_url }}" target="_blank" class="external-link">View PDF</a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="danger-zone" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                {% if not paper.credibility %}
+                <button class="action-btn score-btn" onclick="scorePaper()" id="score-btn" style="background-color: #9c27b0; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                    Score Paper & Extract Metadata
+                </button>
+                {% else %}
+                <button class="action-btn rescore-btn" onclick="rescorePaper()" id="rescore-btn" style="background-color: #9c27b0; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                    Re-evaluate Credibility
+                </button>
+                {% endif %}
+                {% if paper.pmc_id and (not paper.full_text or paper.full_text|length == 0) %}
+                <button class="action-btn fetch-pmc-btn" onclick="fetchPMCFullText()" id="fetch-pmc-btn" style="background-color: #4caf50; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                    Fetch Full Text from PMC
+                </button>
+                {% endif %}
+                <button class="action-btn regenerate-btn" onclick="regenerateFromFullText()" style="background-color: #ff9800; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                    Regenerate from Full Text
+                </button>
+                <button class="action-btn regenerate-btn" onclick="regenerateFromAbstract()" style="background-color: #ff9800; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                    Regenerate from Abstract
+                </button>
+                <button class="action-btn reevaluate-btn" onclick="reevaluatePropositions()" style="background-color: #2196f3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                    Re-evaluate Propositions
+                </button>
+                <button class="delete-btn" onclick="deletePaper()" style="background-color: #d32f2f; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                    Delete Paper
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Study Metadata -->
+    {% if paper.credibility %}
+    <section class="detail-section">
+        <h3> Study Metadata</h3>
+        <div class="metadata-container" style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="metadata-item">
+                <strong>Study Type:</strong>
+                <span class="study-type-badge" style="background-color: #e3f2fd; color: #1976d2; padding: 4px 12px; border-radius: 12px; font-weight: 500;">
+                    {{ paper.credibility.study_type.replace('_', ' ').title() if paper.credibility and paper.credibility.study_type else 'Unknown' }}
+                </span>
+            </div>
+
+            {% if paper.credibility %}
+            <div class="methodology-badges" style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+                <strong style="margin-right: 8px;">Methodology:</strong>
+
+                {% if paper.credibility.sample_size %}
+                <span class="method-badge" style="background-color: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 10px; font-size: 0.9em;">
+                    {{ paper.credibility.sample_size }} participants
+                </span>
+                {% endif %}
+
+                {% if paper.credibility.study_duration %}
+                <span class="method-badge" style="background-color: #fff3e0; color: #e65100; padding: 4px 10px; border-radius: 10px; font-size: 0.9em;">
+                    Duration: {{ paper.credibility.study_duration }}
+                </span>
+                {% endif %}
+
+                {% if paper.credibility.randomized %}
+                <span class="method-badge" style="background-color: #f3e5f5; color: #6a1b9a; padding: 4px 10px; border-radius: 10px; font-size: 0.9em;">
+                    Randomized
+                </span>
+                {% endif %}
+
+                {% if paper.credibility.blinding %}
+                <span class="method-badge" style="background-color: #fce4ec; color: #c2185b; padding: 4px 10px; border-radius: 10px; font-size: 0.9em;">
+                    {{ paper.credibility.blinding|capitalize }}-Blind
+                </span>
+                {% endif %}
+
+                {% if paper.credibility.control_type %}
+                <span class="method-badge" style="background-color: #ede7f6; color: #4527a0; padding: 4px 10px; border-radius: 10px; font-size: 0.9em;">
+                    {{ paper.credibility.control_type|capitalize }} Control
+                </span>
+                {% endif %}
+
+                {% if paper.credibility.population_type %}
+                <span class="method-badge" style="background-color: #e1f5fe; color: #01579b; padding: 4px 10px; border-radius: 10px; font-size: 0.9em;">
+                    {{ paper.credibility.population_type.replace('_', ' ')|capitalize }}
+                </span>
+                {% endif %}
+
+                {% if not (paper.credibility.sample_size or paper.credibility.study_duration or paper.credibility.randomized or paper.credibility.blinding or paper.credibility.control_type or paper.credibility.population_type) %}
+                <span style="color: #666; font-style: italic; font-size: 0.9em;">No methodology details extracted from abstract</span>
+                {% endif %}
+            </div>
+
+            {% if paper.credibility.metadata_confidence %}
+            <div class="metadata-confidence" style="font-size: 0.9em; color: #555;">
+                <strong>Classification Confidence:</strong> {{ paper.credibility.metadata_confidence }}/10
+            </div>
+            {% endif %}
+            {% endif %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Abstract -->
+    {% if paper.abstract %}
+    <section class="detail-section">
+        <h3> Abstract</h3>
+        <p class="abstract-text">{{ paper.abstract }}</p>
+    </section>
+    {% endif %}
+
+    <!-- Full Text (collapsible) -->
+    {% if paper.full_text and paper.full_text|length > 0 %}
+    <section class="detail-section">
+        <div class="full-text-header">
+            <h3> Full Paper Text</h3>
+            <button class="toggle-btn" onclick="toggleFullText()" id="toggle-fulltext-btn">
+                Show Full Text
+            </button>
+            {% if not has_fulltext_propositions %}
+            <button class="action-btn" onclick="extractFromFullText()" id="extract-fulltext-btn">
+                Extract Propositions from Full Text
+            </button>
+            {% endif %}
+        </div>
+        <div id="full-text-content" class="full-text-content" style="display: none;">
+            <div class="text-stats">
+                <span>Sections: {{ paper.full_text|length }}</span>
+                {% set total_chars = paper.full_text|map(attribute='1')|map('length')|sum %}
+                <span>Total Characters: {{ total_chars }}</span>
+            </div>
+            <div class="sections-container">
+                {% for section_name, section_text in paper.full_text %}
+                <div class="section-block">
+                    <h4 class="section-title">{{ section_name.replace('_', ' ').title() }}</h4>
+                    <div class="section-content">{{ section_text }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div id="extraction-status" style="display: none; margin-top: 10px;">
+            <div class="status-message"></div>
+        </div>
+    </section>
+    {% elif has_fulltext_propositions %}
+    <!-- Full text was extracted but not saved -->
+    <section class="detail-section">
+        <div class="info-box" style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 12px 16px; border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.9em; line-height: 1.5;">
+                <strong>ℹ️ Full Text Note:</strong> This paper has {{ paper.chunks|length }} chunks and {{ paper.propositions|length }} propositions extracted from full text, 
+                but the original full text content was not saved to the database 
+                The propositions and chunks are still available for verification.
+            </p>
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- Similar Papers -->
+    <section class="detail-section">
+        <h3> Similar Papers</h3>
+        <p class="subtitle" style="margin-bottom: 12px;">Papers with similar propositions based on semantic similarity</p>
+        <div class="info-box" style="background-color: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px 16px; margin-bottom: 16px; border-radius: 4px;">
+            <p style="margin: 0; font-size: 0.9em; line-height: 1.5;">
+                <strong>About similarity scores:</strong> The "% match" represents semantic similarity based on shared proposition content.
+                Papers with similar research topics and findings score higher. 90-100% = very similar research, 70-90% = related topics,
+                50-70% = loosely related. This measures topical overlap, not citation relationships or agreement.
+            </p>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <label for="similar-papers-count" style="font-weight: 500;">Number of papers:</label>
+            <input
+                type="number"
+                id="similar-papers-count"
+                value="5"
+                min="1"
+                max="20"
+                class="number-input"
+                style="width: 80px;"
+            />
+            <button class="action-btn" onclick="loadSimilarPapers()" id="load-similar-btn" style="background-color: #2196f3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">
+                See Similar Papers
+            </button>
+        </div>
+        <div id="similar-papers-container" style="display: none; margin-top: 20px;">
+            <div id="similar-papers-list"></div>
+        </div>
+    </section>
+
+    <!-- Statistics -->
+    <section class="detail-section">
+        <h3> Extraction Statistics</h3>
+        <p class="subtitle">Click on a stat to view details below</p>
+        <div class="stats-grid clickable">
+            <div class="stat-card" onclick="toggleSection('chunks')" data-section="chunks">
+                <div class="stat-value">{{ stats.chunks }}</div>
+                <div class="stat-label">Chunks</div>
+            </div>
+            <div class="stat-card" onclick="toggleSection('all-propositions')" data-section="all-propositions">
+                <div class="stat-value">{{ stats.propositions_total }}</div>
+                <div class="stat-label">Total Propositions</div>
+            </div>
+            <div class="stat-card" onclick="toggleSection('quality-propositions')" data-section="quality-propositions">
+                <div class="stat-value">{{ stats.propositions_quality }}</div>
+                <div class="stat-label">Quality Propositions</div>
+            </div>
+            <div class="stat-card" onclick="toggleSection('success-rate')" data-section="success-rate">
+                <div class="stat-value">{{ "%.1f"|format(stats.success_rate * 100) }}%</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quality Propositions (toggleable) -->
+    <section class="detail-section toggleable-section" id="quality-propositions-section" style="display: none;">
+        <h3> Quality Propositions ({{ quality_props|length }})</h3>
+        {% if quality_props %}
+        <div class="propositions-list">
+            {% for prop in quality_props %}
+            <div class="proposition-item">
+                <a href="/propositions/{{ prop.prop_id }}" class="prop-link-inline">
+                    <div class="prop-text">{{ prop.text }}</div>
+                </a>
+                <div class="prop-meta">
+                    <span class="meta-badge">Chunk: {{ prop.chunk_id }}</span>
+                    {{ format_source_badge(prop.chunk_id | get_chunk_section, prop.page) | safe }}
+                </div>
+                {% if prop.evaluation %}
+                <div class="quality-scores-inline">
+                    <span class="score-item">Accuracy: {{ prop.evaluation.accuracy }}/10</span>
+                    <span class="score-item">Clarity: {{ prop.evaluation.clarity }}/10</span>
+                    <span class="score-item">Completeness: {{ prop.evaluation.completeness }}/10</span>
+                    <span class="score-item">Conciseness: {{ prop.evaluation.conciseness }}/10</span>
+                    <span class="score-item average">Avg: {{ "%.1f"|format(prop.evaluation.average_score()) }}/10</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-message">No quality propositions found.</p>
+        {% endif %}
+    </section>
+
+    <!-- All Propositions (toggleable) -->
+    <section class="detail-section toggleable-section" id="all-propositions-section" style="display: none;">
+        <h3> All Propositions ({{ all_propositions|length }})</h3>
+        {% if all_propositions %}
+        <div class="propositions-list">
+            {% for prop in all_propositions %}
+            <div class="proposition-item {% if not prop.is_high_quality() %}low-quality{% endif %}">
+                <a href="/propositions/{{ prop.prop_id }}" class="prop-link-inline">
+                    <div class="prop-text">
+                        {% if prop.is_high_quality() %}{% else %}{% endif %}
+                        {{ prop.text }}
+                    </div>
+                </a>
+                <div class="prop-meta">
+                    <span class="meta-badge">Chunk: {{ prop.chunk_id }}</span>
+                    {{ format_source_badge(prop.chunk_id | get_chunk_section, prop.page) | safe }}
+                </div>
+                {% if prop.evaluation %}
+                <div class="quality-scores-inline">
+                    <span class="score-item">Accuracy: {{ prop.evaluation.accuracy }}/10</span>
+                    <span class="score-item">Clarity: {{ prop.evaluation.clarity }}/10</span>
+                    <span class="score-item">Completeness: {{ prop.evaluation.completeness }}/10</span>
+                    <span class="score-item">Conciseness: {{ prop.evaluation.conciseness }}/10</span>
+                    <span class="score-item average">Avg: {{ "%.1f"|format(prop.evaluation.average_score()) }}/10</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-message">No propositions found.</p>
+        {% endif %}
+    </section>
+
+    <!-- Chunks (toggleable) -->
+    <section class="detail-section toggleable-section" id="chunks-section" style="display: none;">
+        <h3> Chunks ({{ chunks|length }})</h3>
+        {% if chunks %}
+        <div class="chunks-list">
+            {% for chunk in chunks %}
+            <div class="chunk-item">
+                <div class="chunk-header">
+                    <a href="/chunks/{{ paper.id }}/{{ chunk.chunk_id }}" style="text-decoration: none; color: inherit;">
+                        <strong>{{ chunk.chunk_id }}</strong>
+                    </a>
+                    {{ format_source_badge(chunk.section, chunk.page) | safe }}
+                </div>
+                <div class="chunk-text">{{ chunk.text }}</div>
+                
+                <!-- Propositions from this chunk -->
+                {% set chunk_props = all_propositions|selectattr("chunk_id", "equalto", chunk.chunk_id)|list %}
+                {% if chunk_props %}
+                <div class="chunk-propositions">
+                    <strong>Propositions from this chunk ({{ chunk_props|length }}):</strong>
+                    <ul>
+                        {% for prop in chunk_props %}
+                        <li>
+                            <a href="/propositions/{{ prop.prop_id }}" class="inline-link">
+                                {% if prop.is_high_quality() %}{% else %}{% endif %}
+                                {{ prop.text }}
+                            </a>
+                            {% if prop.evaluation %}
+                            <span class="inline-score">(Avg: {{ "%.1f"|format(prop.evaluation.average_score()) }}/10)</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="empty-message">No chunks found.</p>
+        {% endif %}
+    </section>
+
+    <!-- Success Rate Info (toggleable) -->
+    <section class="detail-section toggleable-section" id="success-rate-section" style="display: none;">
+        <h3>Success Rate Analysis</h3>
+        <div class="success-rate-display">
+            <div class="rate-card">
+                <h4>Overall Success Rate</h4>
+                <div class="rate-percentage">{{ "%.1f"|format(stats.success_rate * 100) }}%</div>
+                <p>{{ stats.propositions_quality }} out of {{ stats.propositions_total }} propositions passed quality checks</p>
+            </div>
+            
+            <div class="rate-breakdown">
+                <h4>Quality Breakdown</h4>
+                <div class="breakdown-item">
+                    <span class="breakdown-label"> Quality Propositions:</span>
+                    <span class="breakdown-value">{{ stats.propositions_quality }}</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="breakdown-label"> Low Quality:</span>
+                    <span class="breakdown-value">{{ stats.propositions_total - stats.propositions_quality }}</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="breakdown-label"> Total Chunks:</span>
+                    <span class="breakdown-value">{{ stats.chunks }}</span>
+                </div>
+                <div class="breakdown-item">
+                    <span class="breakdown-label"> Avg Props per Chunk:</span>
+                    <span class="breakdown-value">{{ "%.1f"|format(stats.propositions_total / stats.chunks) if stats.chunks > 0 else 0 }}</span>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" class="loading-section" style="display: none;">
+    <div class="spinner"></div>
+    <p class="loading-text" id="loadingText">Processing...</p>
+</div>
+
+<script>
+// Toggle sections when stats are clicked
+function toggleSection(sectionId) {
+    const allSections = document.querySelectorAll('.toggleable-section');
+    const targetSection = document.getElementById(sectionId + '-section');
+    const allStatCards = document.querySelectorAll('.stat-card');
+    const clickedCard = document.querySelector(`[data-section="${sectionId}"]`);
+    
+    // If clicking the same section, toggle it
+    if (targetSection.style.display === 'block') {
+        targetSection.style.display = 'none';
+        clickedCard.classList.remove('active');
+    } else {
+        // Hide all sections
+        allSections.forEach(section => {
+            section.style.display = 'none';
+        });
+        
+        // Remove active class from all cards
+        allStatCards.forEach(card => {
+            card.classList.remove('active');
+        });
+        
+        // Show target section
+        targetSection.style.display = 'block';
+        clickedCard.classList.add('active');
+        
+        // Scroll to section
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
+
+// Toggle full text display
+function toggleFullText() {
+    const content = document.getElementById('full-text-content');
+    const btn = document.getElementById('toggle-fulltext-btn');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        btn.textContent = 'Hide Full Text';
+    } else {
+        content.style.display = 'none';
+        btn.textContent = 'Show Full Text';
+    }
+}
+
+// Extract propositions from full text
+async function extractFromFullText() {
+    const btn = document.getElementById('extract-fulltext-btn');
+    const statusDiv = document.getElementById('extraction-status');
+    const statusMsg = statusDiv.querySelector('.status-message');
+    
+    // Disable button and show status
+    btn.disabled = true;
+    btn.textContent = 'Extracting...';
+    statusDiv.style.display = 'block';
+    statusMsg.innerHTML = '<p class="info-message">Extracting propositions from full text. This may take a few minutes...</p>';
+    
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}/extract-fulltext`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            statusMsg.innerHTML = `
+                <p class="success-message">Successfully extracted ${result.propositions_added} new propositions from full text!</p>
+                <p>Reloading page...</p>
+            `;
+            // Reload page after 2 seconds to show new propositions
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            statusMsg.innerHTML = `<p class="error-message">Error: ${result.error || 'Unknown error occurred'}</p>`;
+            btn.disabled = false;
+            btn.textContent = 'Extract Propositions from Full Text';
+        }
+    } catch (error) {
+        statusMsg.innerHTML = `<p class="error-message">Error: ${error.message}</p>`;
+        btn.disabled = false;
+        btn.textContent = 'Extract Propositions from Full Text';
+    }
+}
+
+async function deletePaper() {
+    if (!confirm('Are you sure you want to delete this paper? This will remove the paper and all its associated chunks and propositions from the database. This action cannot be undone.')) {
+        return;
+    }
+
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            alert('Paper deleted successfully. Redirecting to papers list...');
+            window.location.href = '/papers';
+        } else {
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function regenerateFromFullText() {
+    console.log('[regenerateFromFullText] Function called');
+
+    if (!confirm('Are you sure you want to regenerate all chunks and propositions from full text?\n\nThis will:\n- Delete all existing chunks and propositions\n- Re-extract new chunks and propositions from the full text\n- NOT perform evaluation (you can evaluate separately)\n\nThis action cannot be undone.')) {
+        console.log('[regenerateFromFullText] User cancelled');
+        return;
+    }
+
+    console.log('[regenerateFromFullText] Starting regeneration...');
+    showLoading('Regenerating from full text...');
+
+    try {
+        const paperId = '{{ paper.id }}';
+        console.log('[regenerateFromFullText] Paper ID:', paperId);
+
+        const response = await fetch(`/api/papers/${paperId}/regenerate-fulltext`, {
+            method: 'POST'
+        });
+        console.log('[regenerateFromFullText] Response status:', response.status);
+
+        const result = await response.json();
+        console.log('[regenerateFromFullText] Result:', result);
+
+        hideLoading();
+
+        if (response.ok) {
+            console.log('[regenerateFromFullText] Success - reloading page');
+            alert(`Successfully regenerated from full text!\n\nChunks: ${result.chunks_count}\nPropositions: ${result.propositions_count}\n\nReloading page...`);
+            window.location.reload();
+        } else {
+            console.error('[regenerateFromFullText] Error:', result.error);
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+        }
+    } catch (error) {
+        console.error('[regenerateFromFullText] Exception:', error);
+        hideLoading();
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function regenerateFromAbstract() {
+    console.log('[regenerateFromAbstract] Function called');
+
+    if (!confirm('Are you sure you want to regenerate all chunks and propositions from abstract?\n\nThis will:\n- Delete all existing chunks and propositions\n- Re-extract new chunks and propositions from the abstract only\n- NOT perform evaluation (you can evaluate separately)\n\nThis action cannot be undone.')) {
+        console.log('[regenerateFromAbstract] User cancelled');
+        return;
+    }
+
+    console.log('[regenerateFromAbstract] Starting regeneration...');
+    showLoading('Regenerating from abstract...');
+
+    try {
+        const paperId = '{{ paper.id }}';
+        console.log('[regenerateFromAbstract] Paper ID:', paperId);
+
+        const response = await fetch(`/api/papers/${paperId}/regenerate-abstract`, {
+            method: 'POST'
+        });
+        console.log('[regenerateFromAbstract] Response status:', response.status);
+
+        const result = await response.json();
+        console.log('[regenerateFromAbstract] Result:', result);
+
+        hideLoading();
+
+        if (response.ok) {
+            console.log('[regenerateFromAbstract] Success - reloading page');
+            alert(`Successfully regenerated from abstract!\n\nChunks: ${result.chunks_count}\nPropositions: ${result.propositions_count}\n\nReloading page...`);
+            window.location.reload();
+        } else {
+            console.error('[regenerateFromAbstract] Error:', result.error);
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+        }
+    } catch (error) {
+        console.error('[regenerateFromAbstract] Exception:', error);
+        hideLoading();
+        alert(`Error: ${error.message}`);
+    }
+}
+
+async function reevaluatePropositions() {
+    if (!confirm('Are you sure you want to re-evaluate all propositions?\n\nThis will:\n- Re-evaluate all existing propositions with the LLM\n- Update quality scores for each proposition\n- Recalculate paper credibility score\n- Update the quality propositions in the vector store\n\nThis may take a few minutes depending on the number of propositions.')) {
+        return;
+    }
+
+    showLoading('Re-evaluating propositions...');
+
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}/reevaluate`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        hideLoading();
+
+        if (response.ok) {
+            alert(`Successfully re-evaluated propositions!\n\nTotal Propositions: ${result.propositions_count}\nQuality Propositions: ${result.quality_propositions_count}\n\nReloading page...`);
+            window.location.reload();
+        } else {
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+        }
+    } catch (error) {
+        hideLoading();
+        alert(`Error: ${error.message}`);
+    }
+}
+
+function showLoading(message) {
+    const overlay = document.getElementById('loadingOverlay');
+    const text = document.getElementById('loadingText');
+    text.textContent = message;
+    overlay.style.display = 'block';
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = 'none';
+}
+
+async function fetchPMCFullText() {
+    const btn = document.getElementById('fetch-pmc-btn');
+
+    if (!confirm('Fetch full text from PubMed Central?\n\nThis will download and save the full text for this paper if available.')) {
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Fetching...';
+    showLoading('Fetching full text from PMC...');
+
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}/fetch-pmc-fulltext`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        hideLoading();
+
+        if (response.ok) {
+            if (result.success) {
+                alert(`Successfully fetched full text from PMC!\n\nSections: ${result.sections_count}\n\nReloading page...`);
+                window.location.reload();
+            } else {
+                alert(`Could not fetch full text: ${result.message || 'Unknown error'}`);
+                btn.disabled = false;
+                btn.textContent = 'Fetch Full Text from PMC';
+            }
+        } else {
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+            btn.disabled = false;
+            btn.textContent = 'Fetch Full Text from PMC';
+        }
+    } catch (error) {
+        hideLoading();
+        alert(`Error: ${error.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Fetch Full Text from PMC';
+    }
+}
+
+async function scorePaper() {
+    const btn = document.getElementById('score-btn');
+    if (!confirm('Score this paper and extract metadata? This will analyze the paper using an LLM.')) {
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Scoring...';
+    showLoading('Scoring paper and extracting metadata...');
+
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}/score`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        hideLoading();
+
+        if (response.ok && result.success) {
+            alert(`Successfully scored paper!\n\nRating: ${result.credibility.rating}/5\nStudy Type: ${result.credibility.study_type}\n\nReloading page...`);
+            window.location.reload();
+        } else {
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+            btn.disabled = false;
+            btn.textContent = 'Score Paper & Extract Metadata';
+        }
+    } catch (error) {
+        hideLoading();
+        alert(`Error: ${error.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Score Paper & Extract Metadata';
+    }
+}
+
+async function rescorePaper() {
+    const btn = document.getElementById('rescore-btn');
+    if (!confirm('Re-evaluate the credibility score for this paper? This will re-analyze the paper using an LLM and may update the rating.')) {
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Re-evaluating...';
+    showLoading('Re-evaluating paper credibility...');
+
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}/score`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        hideLoading();
+
+        if (response.ok && result.success) {
+            alert(`Successfully re-evaluated paper credibility!\n\nNew Rating: ${result.credibility.rating}/5\nStudy Type: ${result.credibility.study_type}\n\nReloading page...`);
+            window.location.reload();
+        } else {
+            alert(`Error: ${result.error || 'Unknown error occurred'}`);
+            btn.disabled = false;
+            btn.textContent = 'Re-evaluate Credibility';
+        }
+    } catch (error) {
+        hideLoading();
+        alert(`Error: ${error.message}`);
+        btn.disabled = false;
+        btn.textContent = 'Re-evaluate Credibility';
+    }
+}
+
+async function loadSimilarPapers() {
+    const btn = document.getElementById('load-similar-btn');
+    const container = document.getElementById('similar-papers-container');
+    const list = document.getElementById('similar-papers-list');
+    const countInput = document.getElementById('similar-papers-count');
+    const topK = countInput.value || 5;
+
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+
+    try {
+        const paperId = '{{ paper.id }}';
+        const response = await fetch(`/api/papers/${paperId}/similar?top_k=${topK}`);
+        const result = await response.json();
+
+        if (response.ok && result.similar_papers) {
+            if (result.similar_papers.length === 0) {
+                list.innerHTML = '<p class="empty-message">No similar papers found.</p>';
+            } else {
+                let html = '<div class="similar-papers-grid">';
+                result.similar_papers.forEach(paper => {
+                    html += `
+                        <div class="similar-paper-card" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #fafafa;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                <a href="${paper.url}" style="font-weight: 600; color: #1976d2; text-decoration: none; flex: 1;">
+                                    ${paper.title}
+                                </a>
+                                <span style="background-color: #e3f2fd; color: #1976d2; padding: 4px 10px; border-radius: 12px; font-size: 0.85em; white-space: nowrap; margin-left: 12px;">
+                                    ${(paper.similarity_score * 100).toFixed(1)}% match
+                                </span>
+                            </div>
+                            <div style="font-size: 0.9em; color: #666; margin-bottom: 4px;">
+                                ${paper.authors.slice(0, 3).join(', ')}${paper.authors.length > 3 ? ' et al.' : ''}
+                            </div>
+                            <div style="font-size: 0.85em; color: #888;">
+                                ${paper.year || 'Unknown year'} • ${paper.citations || 0} citations
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                list.innerHTML = html;
+            }
+            container.style.display = 'block';
+            btn.textContent = 'Refresh Similar Papers';
+        } else {
+            alert('Error loading similar papers');
+            btn.textContent = 'See Similar Papers';
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        btn.textContent = 'See Similar Papers';
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

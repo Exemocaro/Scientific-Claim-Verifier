@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Papers - Scientific Claim Verification{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2> Papers in Knowledge Base</h2>
+    <div class="stats-summary">
+        <span class="stat-item">Total Papers: <strong>{{ stats.papers }}</strong></span>
+        <span class="stat-item">Total Propositions: <strong>{{ stats.propositions_total }}</strong></span>
+        <span class="stat-item">Total Quality Propositions: <strong>{{ stats.propositions_quality }}</strong></span>
+
+        <div class="filter-section-inline" style="display: inline-block; margin-left: 20px;">
+            <form method="GET" action="/papers" class="filter-form"
+                style="display: inline-flex; gap: 15px; align-items: center;">
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label for="full_text_filter">Full Text:</label>
+                    <select name="full_text" id="full_text_filter" onchange="this.form.submit()" class="filter-select">
+                        <option value="all" {% if full_text_filter=='all' %}selected{% endif %}>All</option>
+                        <option value="available" {% if full_text_filter=='available' %}selected{% endif %}>Available
+                        </option>
+                        <option value="abstract_only" {% if full_text_filter=='abstract_only' %}selected{% endif %}>
+                            Abstract Only</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label for="source_filter">Source:</label>
+                    <select name="source" id="source_filter" onchange="this.form.submit()" class="filter-select">
+                        <option value="all" {% if source_filter=='all' %}selected{% endif %}>All</option>
+                        <option value="pubmed" {% if source_filter=='pubmed' %}selected{% endif %}>PubMed</option>
+                        <option value="pmc" {% if source_filter=='pmc' %}selected{% endif %}>PMC</option>
+                        <option value="semantic_scholar" {% if source_filter=='semantic_scholar' %}selected{% endif %}>
+                            Semantic Scholar</option>
+                        <option value="local" {% if source_filter=='local' %}selected{% endif %}>Local</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label for="year_from_filter">Year From:</label>
+                    <input type="number" name="year_from" id="year_from_filter"
+                        value="{% if year_from_filter %}{{ year_from_filter }}{% endif %}" placeholder="e.g., 2020"
+                        min="1900" max="2100" onchange="this.form.submit()" class="filter-select" style="width: 100px;">
+                </div>
+
+                <div style="display: flex; gap: 5px; align-items: center;">
+                    <label for="credibility_min_filter">Min Credibility:</label>
+                    <input type="number" name="credibility_min" id="credibility_min_filter"
+                        value="{% if credibility_min_filter %}{{ credibility_min_filter }}{% endif %}"
+                        placeholder="e.g., 3.0" min="0" max="5" step="0.1" onchange="this.form.submit()"
+                        class="filter-select" style="width: 80px;">
+                </div>
+
+                {% if full_text_filter != 'all' or source_filter != 'all' or year_from_filter or credibility_min_filter
+                %}
+                <a href="/papers" style="color: #2196f3; text-decoration: none; font-size: 0.9em;">Clear</a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="upload-section">
+    <div class="filter-section-inline" style="display: inline-block; margin-bottom: 15px;">
+        <div class="filter-form" style="display: inline-flex; gap: 15px; align-items: center;">
+            <div style="display: flex; gap: 5px; align-items: center;">
+                <label for="extractionMethod">PDF Method:</label>
+                <select id="extractionMethod" class="filter-select">
+                    <option value="pymupdf" selected>PyMuPDF</option>
+                    <option value="marker">Marker</option>
+                    <option value="pdfplumber">PDFPlumber</option>
+                    <option value="pypdf">PyPDF</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <button onclick="document.getElementById('uploadInput').click()" class="upload-btn">
+            Upload
+        </button>
+        <button onclick="document.getElementById('uploadWithExtractionInput').click()" class="upload-btn">
+            Upload with Extraction
+        </button>
+    </div>
+    <input type="file" id="uploadInput" accept=".pdf,.txt,.md" multiple style="display: none;"
+        onchange="uploadFiles(event, false)">
+    <input type="file" id="uploadWithExtractionInput" accept=".pdf,.txt,.md" multiple style="display: none;"
+        onchange="uploadFiles(event, true)">
+    <div id="uploadStatus" class="upload-status"></div>
+</div>
+
+{% if papers %}
+<div class="papers-grid">
+    {% for paper in papers %}
+    <div class="paper-card">
+        <a href="/papers/{{ paper.id }}" class="paper-link">
+            <h3 class="paper-title">{{ paper.title }}</h3>
+        </a>
+
+        <div class="paper-meta">
+            <span class="meta-item">📅 {{ paper.year or "Unknown" }}</span>
+            <span class="meta-item"> {{ paper.citations or 0 }} citations</span>
+            <span class="meta-item">🏢 {{ paper.source }}</span>
+        </div>
+
+        <div class="paper-authors">
+            <strong>Authors:</strong>
+            {% if paper.authors %}
+            {{ paper.authors[:3]|join(", ") }}{% if paper.authors|length > 3 %}, and {{ paper.authors|length - 3 }}
+            more{% endif %}
+            {% else %}
+            Unknown
+            {% endif %}
+        </div>
+
+        <div class="paper-stats">
+            <span class="stat-badge"> {{ paper.propositions|length }} propositions</span>
+            <span class="stat-badge"> {{ paper.chunks|length }} chunks</span>
+            {% if paper.credibility %}
+            <span class="stat-badge credibility">★ {{ "%.1f"|format(paper.credibility.rating) }}/5</span>
+            {% endif %}
+        </div>
+
+        {% if paper.abstract %}
+        <div class="paper-abstract">
+            {{ paper.abstract[:200] }}{% if paper.abstract|length > 200 %}...{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <p>No papers found in the knowledge base.</p>
+    <p>Run the extraction pipeline to add papers.</p>
+</div>
+{% endif %}
+
+{% if pagination and pagination.total_pages > 1 %}
+<div class="pagination-container">
+    <div class="pagination-info">
+        Page {{ pagination.current_page }} of {{ pagination.total_pages }}
+        <span class="item-count">({{ pagination.item_start }}-{{ pagination.item_end }})</span>
+    </div>
+
+    <div class="pagination-controls">
+        {% if pagination.has_prev %}
+        <a href="/papers?page={{ pagination.prev_page }}{% if full_text_filter != 'all' %}&full_text={{ full_text_filter }}{% endif %}{% if source_filter != 'all' %}&source={{ source_filter }}{% endif %}{% if year_from_filter %}&year_from={{ year_from_filter }}{% endif %}{% if credibility_min_filter %}&credibility_min={{ credibility_min_filter }}{% endif %}"
+            class="pagination-btn pagination-prev">
+            Previous
+        </a>
+        {% else %}
+        <span class="pagination-btn pagination-disabled">Previous</span>
+        {% endif %}
+
+        {% if pagination.has_next %}
+        <a href="/papers?page={{ pagination.next_page }}{% if full_text_filter != 'all' %}&full_text={{ full_text_filter }}{% endif %}{% if source_filter != 'all' %}&source={{ source_filter }}{% endif %}{% if year_from_filter %}&year_from={{ year_from_filter }}{% endif %}{% if credibility_min_filter %}&credibility_min={{ credibility_min_filter }}{% endif %}"
+            class="pagination-btn pagination-next">
+            Next
+        </a>
+        {% else %}
+        <span class="pagination-btn pagination-disabled">Next</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<script>
+    function showStatus(message, type = 'info') {
+        const statusDiv = document.getElementById('uploadStatus');
+        statusDiv.textContent = message;
+        statusDiv.className = 'upload-status ' + type;
+        statusDiv.style.display = 'block';
+    }
+
+    function hideStatus() {
+        const statusDiv = document.getElementById('uploadStatus');
+        statusDiv.style.display = 'none';
+    }
+
+    async function uploadFiles(event, withExtraction) {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        const formData = new FormData();
+        for (let file of files) {
+            formData.append('files', file);
+        }
+
+        // Get selected extraction method
+        const extractionMethod = document.getElementById('extractionMethod').value;
+        formData.append('extraction_method', extractionMethod);
+
+        // Determine which endpoint to use
+        const endpoint = withExtraction ? '/api/papers/upload-multiple' : '/api/papers/upload-multiple-no-extraction';
+        const action = withExtraction ? 'Uploading and extracting from' : 'Uploading';
+
+        showStatus(action + ' ' + files.length + ' file(s) (using ' + extractionMethod + ')...', 'loading');
+
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.successful > 0) {
+                const message = withExtraction
+                    ? 'Successfully uploaded and extracted from ' + result.successful + ' of ' + result.total + ' files'
+                    : 'Successfully uploaded ' + result.successful + ' of ' + result.total + ' files';
+                showStatus(message, 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+            } else {
+                showStatus('All uploads failed. Check console for details.', 'error');
+                console.log(result.results);
+            }
+        } catch (error) {
+            showStatus('Upload failed: ' + error.message, 'error');
+        }
+
+        event.target.value = '';
+    }
+</script>
+{% endblock %}

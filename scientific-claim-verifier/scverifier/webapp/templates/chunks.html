@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Chunks - Scientific Claim Verification{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h2> Document Chunks</h2>
+    <p class="subtitle">Search and explore document chunks</p>
+</div>
+
+<!-- Search Form -->
+<div class="search-section">
+    <form method="post" action="/chunks/search" class="search-form">
+        <input 
+            type="text" 
+            name="query" 
+            placeholder="Enter a query to find similar chunks..." 
+            value="{{ query or '' }}"
+            class="search-input"
+            required
+        />
+        <button type="submit" class="search-button"> Search</button>
+    </form>
+</div>
+
+{% if error %}
+<div class="error-message">
+     {{ error }}
+</div>
+{% endif %}
+
+{% if query %}
+<div class="results-header">
+    <h3>Search Results for: "{{ query }}"</h3>
+    <p>Found {{ total }} matching chunks</p>
+</div>
+{% else %}
+<div class="results-header">
+    <h3>All Chunks</h3>
+    <p>Showing {{ total }} chunks</p>
+</div>
+{% endif %}
+
+{% if chunks %}
+<div class="chunks-list">
+    {% for chunk in chunks %}
+    <a href="/chunks/{{ chunk.paper_id }}/{{ chunk.chunk_id }}" class="chunk-card-link">
+        <div class="chunk-card clickable-card">
+            <div class="chunk-header">
+                <strong>{{ chunk.chunk_id }}</strong>
+                {{ format_source_badge(chunk.section, chunk.page) | safe }}
+            </div>
+            
+            <div class="chunk-text">{{ chunk.text }}</div>
+            
+            <div class="chunk-meta">
+                <strong>Source:</strong> 
+                <span class="paper-name">{{ chunk.source }}</span>
+            </div>
+            
+            <div class="chunk-stats">
+                <span class="stat-badge">Length: {{ chunk.text|length }} characters</span>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    {% if query %}
+    <p>No chunks found matching your query.</p>
+    <p>Try a different search term.</p>
+    {% else %}
+    <p>No chunks available in the knowledge base.</p>
+    <p>Run the extraction pipeline to add papers and chunks.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if pagination and pagination.total_pages > 1 and not query %}
+<div class="pagination-container">
+    <div class="pagination-info">
+        Page {{ pagination.current_page }} of {{ pagination.total_pages }}
+        <span class="item-count">({{ pagination.item_start }}-{{ pagination.item_end }})</span>
+    </div>
+
+    <div class="pagination-controls">
+        {% if pagination.has_prev %}
+            <a href="/chunks?page={{ pagination.prev_page }}"
+               class="pagination-btn pagination-prev">
+                Previous
+            </a>
+        {% else %}
+            <span class="pagination-btn pagination-disabled">Previous</span>
+        {% endif %}
+
+        {% if pagination.has_next %}
+            <a href="/chunks?page={{ pagination.next_page }}"
+               class="pagination-btn pagination-next">
+                Next
+            </a>
+        {% else %}
+            <span class="pagination-btn pagination-disabled">Next</span>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

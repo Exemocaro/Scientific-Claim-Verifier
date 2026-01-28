@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scverifier"
+version = "0.1.0"
+description = "A framework for automated verification of scientific claims using Large Language Models"
+authors = [
+    {name = "Mateus Medeiros Pereira", email = "your.email@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+keywords = ["llm", "scientific-claims", "verification", "nlp", "retrieval"]
+
+dependencies = [
+    # LangChain ecosystem
+    "langchain",
+    "langchain-core",
+    "langchain-community",
+    "langchain-google-genai",
+    "langchain-ollama",
+    "langgraph",
+    
+    # Vector stores and embeddings
+    "faiss-cpu",
+    
+    # PDF processing
+    "PyPDF2",
+    "PyMuPDF",
+    "marker-pdf",
+    
+    # Data validation and models
+    "pydantic",
+    
+    # Environment and configuration
+    "python-dotenv",
+    
+    # API requests
+    "requests",
+    
+    # Tokenization and text processing
+    "tiktoken",
+    "pypdf",
+    "pdfplumber",
+    "pymupdf4llm",
+
+    # Benchamrking
+    "datasets",
+    "huggingface_hub",
+    "matplotlib",
+    "seaborn",
+
+    # webapp
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "plotly",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "black",
+    "flake8",
+    "mypy",
+    "ipython",
+    "jupyter",
+    "pre-commit",
+]
+
+[project.urls]
+Homepage = "https://github.com/Exemocaro/Scientific-Claim-Verifier"
+Repository = "https://github.com/Exemocaro/Scientific-Claim-Verifier"
+
+[project.scripts]
+verify-claim = "scripts.run_pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scverifier*", "scripts*"]
+exclude = ["tests*", "notebooks*"]
+
+[tool.black]
+line-length = 120
+target-version = ['py312']
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
