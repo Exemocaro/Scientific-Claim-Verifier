@@ -8,6 +8,8 @@ Usage:
     python run_verification_pipeline.py "claim to verify"
     python run_verification_pipeline.py "claim to verify" --max-papers 10
     python run_verification_pipeline.py "claim to verify" --kb-only
+    python run_verification_pipeline.py "claim to verify" --skip-extraction-eval
+    python run_verification_pipeline.py "claim to verify" --kb-only --use-all-propositions
 """
 
 import argparse
@@ -145,6 +147,16 @@ def main():
         action="store_true",
         help="Use only existing knowledge base data (don't search for new papers)",
     )
+    parser.add_argument(
+        "--skip-extraction-eval",
+        action="store_true",
+        help="Skip quality evaluation during proposition extraction (faster, accepts all propositions). Only applies when searching for new papers.",
+    )
+    parser.add_argument(
+        "--use-all-propositions",
+        action="store_true",
+        help="Use all propositions instead of only quality ones during claim verification. Useful with --kb-only when quality evaluation was skipped during extraction.",
+    )
     args = parser.parse_args()
 
     # Print header
@@ -156,7 +168,9 @@ def main():
     if not args.kb_only:
         print(f"   Max papers: {args.max_papers}")
         print("   Batch size: 5 papers (with incremental saving)")
+        print(f"   Skip extraction evaluation: {args.skip_extraction_eval}")
     print(f"   Mode: {'KB-only' if args.kb_only else 'Search + KB'}")
+    print(f"   Use all propositions: {args.use_all_propositions}")
 
     # Initialize knowledge base
     print("\n Initializing knowledge base...")
@@ -187,16 +201,28 @@ def main():
     print("\n Initializing pipeline...")
     pipeline = VerificationPipeline(kb)
 
+    # Configure extraction evaluation (only applies to new paper extraction during search)
+    if args.skip_extraction_eval:
+        pipeline.extractor.skip_evaluation = True
+        print("   Extraction evaluation: DISABLED (faster, all propositions accepted)")
+    else:
+        pipeline.extractor.skip_evaluation = False
+        print("   Extraction evaluation: ENABLED (quality filtering)")
+
     # Run verification
     print("\n Starting verification...\n")
 
     try:
+        # quality_claims controls whether to filter to quality propositions during verification
+        quality_claims = not args.use_all_propositions
+
         if args.kb_only:
             # Use only KB data
-            result = pipeline.verify_claim_from_kb(args.claim)
+            result = pipeline.verify_claim_from_kb(args.claim, quality_claims=quality_claims)
         else:
             # Search for papers and verify
-            result = pipeline.verify_claim_with_search(args.claim, max_papers=args.max_papers)
+            # Note: The extraction evaluation is already configured via pipeline.extractor.skip_evaluation
+            result = pipeline.verify_claim_with_search(args.claim, max_papers=args.max_papers, quality_claims=quality_claims)
 
         # Print results
         print_results(result, kb)

@@ -5,10 +5,10 @@ Extraction Pipeline Script
 Extract propositions from local files or folders and store them in the knowledge base.
 
 Usage:
-    python run_extraction_pipeline.py                    # Process demo paper
-    python run_extraction_pipeline.py file.pdf           # Process single file
-    python run_extraction_pipeline.py folder/            # Process all files in folder
-    python run_extraction_pipeline.py file1.pdf file2.txt  # Process multiple files
+    python run_extraction_pipeline.py                           # Process demo paper
+    python run_extraction_pipeline.py data/demo_paper.pdf       # Process single file
+    python run_extraction_pipeline.py folder/                   # Process all files in folder
+    python run_extraction_pipeline.py file1.pdf file2.pdf       # Process multiple files
 """
 
 import os
@@ -73,9 +73,12 @@ def process_file(
             print(" Paper exists but has no propositions. Reprocessing...")
             kb.delete_paper(paper.id)
 
-        # Extract propositions
+        # Extract propositions (use full text if abstract is not available)
         print("\n Extracting propositions...")
-        extractor.extract_from_paper(paper, show_steps=True)
+        use_full_text = not paper.abstract or len(paper.abstract.strip()) == 0
+        if use_full_text and paper.full_text:
+            print("   Using full text for extraction (no abstract available)")
+        extractor.extract_from_paper(paper, show_steps=True, use_full_text=use_full_text)
 
         # Add to knowledge base
         print("\n Adding to knowledge base...")
@@ -93,55 +96,18 @@ def process_file(
         traceback.print_exc()
 
 
-def process_demo(extractor: PropositionExtractor, local_paper_processor: LocalPaperProcessor, kb: KnowledgeBase):
-    """Process a demo paper for testing.
+def get_demo_paper_path() -> str:
+    """Get the path to the demo paper.
 
-    Args:
-        extractor: PropositionExtractor instance
-        local_paper_processor: LocalPaperProcessor instance
-        kb: KnowledgeBase instance
+    Returns:
+        Path to the demo paper PDF
     """
-    print(f"\n{'='*70}")
-    print(" Processing Demo Paper")
-    print("=" * 70)
+    # Get the project root directory (parent of scripts folder)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    demo_path = project_root / "data" / "demo_paper.pdf"
 
-    # Create demo paper
-    paper = local_paper_processor.create_demo_paper()
-
-    print(" Demo Paper Info:")
-    print(f"   Title: {paper.title}")
-    print(f"   ID: {paper.id}")
-    print(f"   Abstract: {paper.abstract[:100]}...")
-    print(f"   DOI: {paper.doi or 'None'}")
-
-    # Check if already processed with propositions
-    existing_paper = kb.get_paper(paper.id)
-    if existing_paper and existing_paper.propositions:
-        print(f"Demo paper already processed with {len(existing_paper.propositions)} propositions")
-        quality_props = len(existing_paper.get_quality_propositions())
-        print(f"   Quality propositions: {quality_props}")
-        print("   Skipping re-extraction to preserve existing data...")
-        return
-
-    # If paper exists but has no propositions, reprocess it
-    if existing_paper:
-        print(" Demo paper exists but has no propositions. Reprocessing...")
-        kb.delete_paper(paper.id)
-
-    # Extract propositions
-    print("\n Extracting propositions...")
-    extractor.extract_from_paper(paper, show_steps=True)
-
-    # Add to knowledge base
-    print("\n Adding to knowledge base...")
-    kb.add_paper(paper, verbose=True)
-
-    # Show statistics
-    stats = paper.get_statistics()
-    print("\n Extraction complete!")
-    print(f"   Total propositions: {stats['propositions_total']}")
-    print(f"   Quality propositions: {stats['propositions_quality']}")
-    print(f"   Success rate: {stats['success_rate']*100:.1f}%")
+    return str(demo_path)
 
 
 def main():
@@ -169,9 +135,17 @@ def main():
 
     # Get files to process
     if len(sys.argv) == 1:
-        # No arguments - process demo
-        print("\n No files specified. Processing demo paper...")
-        process_demo(extractor, local_paper_processor, kb)
+        # No arguments - process demo paper
+        demo_path = get_demo_paper_path()
+
+        if not os.path.exists(demo_path):
+            print(f"\n Error: Demo paper not found at {demo_path}")
+            print("   Please ensure data/demo_paper.pdf exists.")
+            print("   Or provide a file path as an argument.")
+            return
+
+        print(f"\n No files specified. Processing demo paper: {demo_path}")
+        process_file(demo_path, extractor, local_paper_processor, kb)
     else:
         # Process provided files/folders
         paths = sys.argv[1:]

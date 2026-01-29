@@ -38,7 +38,7 @@ class VerificationPipeline:
     # ======================== VERIFICATION WITH SEARCH ========================
 
     def verify_claim_with_search(
-        self, claim: str, max_papers: int = 30, use_full_text: bool = False, max_props_per_paper: int = 5, max_propositions: int = Config.PROPOSITION_RETRIEVAL_K
+        self, claim: str, max_papers: int = 30, use_full_text: bool = False, quality_claims: bool = True, max_props_per_paper: int = 5, max_propositions: int = Config.PROPOSITION_RETRIEVAL_K
     ) -> VerificationResult:
         """Verify a claim by searching for papers online, processing them, and verifying.
 
@@ -53,6 +53,7 @@ class VerificationPipeline:
             claim: Scientific claim to verify
             max_papers: Maximum number of papers to search for and process
             use_full_text: If True, extract from full_text. If False, extract from abstract only. Default False.
+            quality_claims: Whether to use only quality propositions during verification. Default True.
             max_props_per_paper: Maximum propositions to use from each paper for diversity
             max_propositions: Maximum total propositions to retrieve per query
 
@@ -128,7 +129,7 @@ class VerificationPipeline:
 
         # Phase 3: Verify claim using all available evidence in KB
         print("\n  Phase 3: Verifying claim with all available evidence...")
-        return self._verify_with_kb_evidence(claim, search_queries, max_props_per_paper=max_props_per_paper, max_propositions=max_propositions)
+        return self._verify_with_kb_evidence(claim, search_queries, quality_claims=quality_claims, max_props_per_paper=max_props_per_paper, max_propositions=max_propositions)
 
     # ======================== VERIFICATION FROM KB ONLY ========================
 

@@ -49,7 +49,7 @@ python create_batch_extraction_jobs.py --benchmark scifact --papers-per-claim 10
 - Scores papers locally using PaperScorer
 - Chunks papers (abstract + full_text) using DocumentProcessor
 - Calculates token usage and estimated cost
-- **Splits into multiple files if >4,000 lines** (keeps paper chunks together)
+- **Splits into multiple files if > BATCH_FILE_SPLIT_LIMIT lines** (keeps paper chunks together)
 - Creates input JSONL + metadata JSON pairs
 - Status: `CREATED` (ready for submission)
 
@@ -59,7 +59,7 @@ data/batch_jobs/input/batch_20251211_143022_0.jsonl
 data/batch_jobs/metadata/batch_20251211_143022_0.json
 ```
 
-If split (>4,000 lines):
+If split (> BATCH_FILE_SPLIT_LIMIT lines):
 ```
 data/batch_jobs/input/batch_20251211_143022_0.jsonl
 data/batch_jobs/input/batch_20251211_143022_1.jsonl

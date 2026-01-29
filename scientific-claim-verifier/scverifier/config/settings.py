@@ -42,9 +42,6 @@ class Config:
     # Folder and DB related stuff
     DB_NAME = "data/kb_all" #"data/kb_benchmarking_scifact_dev" # "data/kb_benchmarking_msvec" # #"data/kb_benchmarking_scifact"
 
-    # Pipeline Settings
-    SKIP_PROPOSITION_EVALUATION = True  # Set to True to skip quality evaluation (faster processing)
-
     # Google gRPC logging for ALTS (Application Layer Transport Security) credential
     os.environ["GRPC_VERBOSITY"] = "NONE"
     os.environ["GRPC_CPP_PLUGIN_LOGGER_LEVEL"] = "ERROR"

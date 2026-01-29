@@ -64,16 +64,17 @@ A framework for automated verification of scientific claims using Large Language
 ### Command Line Usage
 
 ```bash
-# Extract propositions from documents
-python scripts/run_extraction_pipeline.py --help
-python scripts/run_extraction_pipeline.py  # Process demo paper
-python scripts/run_extraction_pipeline.py file.pdf  # Process single file
+# Extract propositions from documents (all sections by default)
+python scripts/run_extraction_pipeline.py  # Process demo paper (data/demo_paper.pdf)
+python scripts/run_extraction_pipeline.py data/demo_paper.pdf  # Process specific file
 python scripts/run_extraction_pipeline.py folder/  # Process all files in folder
 
 # Verify claims
 python scripts/run_verification_pipeline.py --help
 python scripts/run_verification_pipeline.py "Vitamin D prevents COVID-19" --max-papers 10
 python scripts/run_verification_pipeline.py "claim" --kb-only  # Use only existing KB
+python scripts/run_verification_pipeline.py "claim" --skip-extraction-eval  # Skip quality evaluation during extraction (faster)
+python scripts/run_verification_pipeline.py "claim" --kb-only --use-all-propositions  # Use all propositions, not just quality ones
 
 # Query knowledge base
 python scripts/query_knowledge_base.py  # Interactive mode
