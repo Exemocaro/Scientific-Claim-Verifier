@@ -760,14 +760,14 @@ async def ask_question(
     logs = []
 
     try:
-        if retrieval_mode == "propositions":
-            logs.append(f" Searching for relevant propositions (top {max_results})...")
-            propositions = kb.search_propositions(question, top_k=max_results)
-            logs.append(f" Found {len(propositions)} relevant propositions")
-        else:
-            logs.append(f" Searching for relevant chunks (top {max_results})...")
+        if retrieval_mode == "quality_propositions":
+            logs.append(f" Searching for relevant quality propositions (top {max_results})...")
             propositions = kb.search_propositions(question, top_k=max_results)
             propositions = [p for p in propositions if p.is_high_quality()]
+            logs.append(f" Found {len(propositions)} quality propositions")
+        else:
+            logs.append(f" Searching for all relevant propositions (top {max_results})...")
+            propositions = kb.search_propositions(question, top_k=max_results)
             logs.append(f" Found {len(propositions)} propositions")
 
         if not propositions:
