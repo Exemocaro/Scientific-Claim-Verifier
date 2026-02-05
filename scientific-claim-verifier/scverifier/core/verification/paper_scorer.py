@@ -23,26 +23,25 @@ class PaperScorer:
     Outputs a simple 1-5 rating that's easy to understand and use.
     """
 
-    # Study type base scores (1-5 stars)
-    # Higher quality study designs receive higher scores
-    STUDY_TYPE_SCORES = {
-        "meta_analysis": 4,
-        "systematic_review": 4,
-        "rct": 3,
-        "randomized_controlled_trial": 3,
-        "computational": 2,
-        "cohort": 2,
-        "case_control": 2,
-        "review": 2,
-        "in_vitro": 1,
-        "animal_study": 2,
-        "observational": 1,
-        "case_report": 1,
-        "editorial": 1,
-        "unknown": 1,
+    # Study types: (score, description)
+    # Higher quality study designs receive higher scores (1-5 stars)
+    STUDY_TYPES = {
+        "meta_analysis": (4, "Systematic review that combines results from multiple studies statistically"),
+        "systematic_review": (4, "Comprehensive review following systematic methodology"),
+        "rct": (3, "Randomized controlled trial"),
+        "computational": (2, "Computational or in silico study"),
+        "cohort": (2, "Cohort study (follows groups over time)"),
+        "case_control": (2, "Case-control study (compares cases with controls)"),
+        "review": (2, "General review article (not systematic)"),
+        "animal_study": (2, "Animal research"),
+        "in_vitro": (1, "Laboratory/cell culture study"),
+        "observational": (1, "Observational study (not experimental)"),
+        "case_report": (1, "Case report or case series"),
+        "editorial": (1, "Opinion piece or editorial"),
+        "unknown": (1, "Cannot determine from abstract"),
     }
 
-    def __init__(self, llm_timeout: int = None):
+    def __init__(self, llm_timeout: int | None = None):
         """Initialize the paper scorer with LLM for metadata extraction.
 
         Args:
@@ -64,7 +63,13 @@ class PaperScorer:
     def _create_metadata_extraction_prompt(self) -> ChatPromptTemplate:
         """Create the prompt for extracting paper metadata from abstract."""
 
-        system_message = """You are a scientific paper metadata extraction system. Your task is to analyze a paper's title and abstract and extract key information about the study design and methodology.
+        # Dynamically generate study type list from STUDY_TYPES
+        study_types_list = "\n".join(
+            f"- {study_type}: {description}"
+            for study_type, (score, description) in self.STUDY_TYPES.items()
+        )
+
+        system_message = f"""You are a scientific paper metadata extraction system. Your task is to analyze a paper's title and abstract and extract key information about the study design and methodology.
 
 EXTRACTION GUIDELINES:
 - Only extract information that is CLEARLY STATED in the title or abstract
@@ -74,18 +79,7 @@ EXTRACTION GUIDELINES:
 
 STUDY TYPE CLASSIFICATION:
 Classify the study into one of these types based on the abstract:
-- meta_analysis: Systematic review that combines results from multiple studies statistically
-- systematic_review: Comprehensive review following systematic methodology
-- rct: Randomized controlled trial
-- cohort: Cohort study (follows groups over time)
-- case_control: Case-control study (compares cases with controls)
-- observational: Observational study (not experimental)
-- case_report: Case report or case series
-- in_vitro: Laboratory/cell culture study
-- animal_study: Animal research
-- review: General review article (not systematic)
-- editorial: Opinion piece or editorial
-- unknown: Cannot determine from abstract
+{study_types_list}
 
 METHODOLOGY EXTRACTION:
 Extract the following ONLY if clearly stated:
@@ -129,7 +123,7 @@ Extract the metadata:"""
         # 1. Extract metadata using LLM (includes study type and methodology)
         metadata = self._extract_metadata_with_llm(paper)
         study_type = metadata.study_type
-        study_score = self.STUDY_TYPE_SCORES.get(study_type, 1)
+        study_score = self.STUDY_TYPES.get(study_type, (1, ""))[0]
 
         # 2. Citation bonus
         citation_bonus = self._get_citation_bonus(paper)
@@ -398,24 +392,3 @@ Extract the metadata:"""
             return 0.5
         else:
             return 0
-
-    # ======================== UTILITIES ========================
-
-    def get_study_type_score(self, study_type: str) -> int:
-        """Get the base score for a specific study type.
-
-        Args:
-            study_type: Study type name (e.g., "rct", "meta_analysis")
-
-        Returns:
-            Base score (1-4)
-        """
-        return self.STUDY_TYPE_SCORES.get(study_type.lower(), 1)
-
-    def get_available_study_types(self) -> List[str]:
-        """Get list of all recognized study types.
-
-        Returns:
-            List of study type names
-        """
-        return list(self.STUDY_TYPE_SCORES.keys())
