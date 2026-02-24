@@ -7,6 +7,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from scverifier.config.settings import Config
 from scverifier.data.models import ClaimVerification, Proposition, VerificationResult
 from scverifier.core.knowledge.knowledge_base import KnowledgeBase
+from scverifier.core.verification.confidence_interpreter import CONFIDENCE_INTERPRETATIONS
 
 
 class ClaimVerifier:
@@ -44,10 +45,25 @@ class ClaimVerifier:
         # Store KB reference for looking up credibility
         self.kb = kb
 
+    @staticmethod
+    def _build_confidence_scoring_section() -> str:
+        """Build the confidence scoring section of the prompt from CONFIDENCE_INTERPRETATIONS."""
+        lines = [
+            "CONFIDENCE SCORING (1-10)",
+            "Rate your confidence in the verdict according to how clearly and consistently the retrieved evidence justifies it",
+        ]
+        for verdict, ranges in CONFIDENCE_INTERPRETATIONS.items():
+            lines.append(f"\nFor {verdict} verdict:")
+            for (min_conf, max_conf), description in sorted(ranges.items(), reverse=True):
+                lines.append(f"- {min_conf}-{max_conf}: {description}")
+        return "\n".join(lines)
+
     def _create_verification_prompt(self) -> ChatPromptTemplate:
         """Create the claim verification prompt template with detailed guidelines."""
 
-        system_message = """You are a scientific claim verification system. Your task is to evaluate whether a given claim is supported, refuted, or has insufficient evidence based on the provided scientific evidence.
+        confidence_section = self._build_confidence_scoring_section()
+
+        system_message = f"""You are a scientific claim verification system. Your task is to evaluate whether a given claim is supported, refuted, or has insufficient evidence based on the provided scientific evidence.
 
 VERIFICATION GUIDELINES:
 - **SUPPORTS**: The evidence clearly supports the claim with specific facts, data, or findings
@@ -56,29 +72,7 @@ VERIFICATION GUIDELINES:
 
 When determining your verdict, always base your reasoning on the relationship between the claim and the retrieved evidence, not on external world knowledge.
 
-CONFIDENCE SCORING (1-10)
-Rate your confidence in the verdict according to how clearly and consistently the retrieved evidence justifies it
-
-For SUPPORTS verdict:
-- 9-10: Extremely confident the claim is true - overwhelming, consistent evidence from high-quality sources
-- 7-8: Highly confident the claim is true - strong, clear evidence with minimal contradictions
-- 5-6: Moderately confident the claim is true - good evidence but some limitations or minor contradictions
-- 3-4: Somewhat confident the claim is true - suggestive evidence but notable uncertainties
-- 1-2: Low confidence the claim is true - weak or very limited supporting evidence
-
-For REFUTES verdict:
-- 9-10: Extremely confident the claim is false - overwhelming, consistent evidence contradicting it
-- 7-8: Highly confident the claim is false - strong, clear evidence refuting it
-- 5-6: Moderately confident the claim is false - good refuting evidence but some uncertainties
-- 3-4: Somewhat confident the claim is false - suggestive refuting evidence but notable gaps
-- 1-2: Low confidence the claim is false - weak or very limited refuting evidence
-
-For INSUFFICIENT_EVIDENCE verdict:
-- 9-10: Extremely confident evidence is insufficient - thoroughly searched, found genuinely mixed/inconclusive results
-- 7-8: Highly confident evidence is insufficient - good search yielded conflicting or unclear findings
-- 5-6: Moderately confident evidence is insufficient - found some mixed evidence but search may be incomplete
-- 3-4: Somewhat confident evidence is insufficient - limited search or unclear if more evidence exists
-- 1-2: Low confidence evidence is insufficient - very limited search, likely missing relevant evidence
+{confidence_section}
 
 REASONING REQUIREMENTS:
 - Cite specific evidence from the provided sources (like this "[Source X]", or "[Sources X, Y, Z]")
@@ -89,9 +83,9 @@ REASONING REQUIREMENTS:
 - If evidence is insufficient, specify what kind of evidence would be needed to reach a stronger conclusion
 
 Evidence from scientific literature (with credibility scores):
-{evidence}
+{{evidence}}
 
-Claim to verify: {claim}
+Claim to verify: {{claim}}
 
 Provide your verification analysis:"""
 

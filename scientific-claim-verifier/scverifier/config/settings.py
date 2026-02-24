@@ -25,7 +25,7 @@ class Config:
     LLM_FALLBACK_MODEL = "gemini-2.0-flash-lite"  # Fallback model when primary hits rate limits
     LLM_TEMPERATURE = 0
     LLM_TIMEOUT = 120  # Timeout for LLM calls in seconds
-    MAX_RETRIES = 1  # Maximum number of retries for LLM calls
+    MAX_RETRIES = 2  # Maximum number of retries for LLM calls (2 = one retry after initial failure)
 
     # Chunking Settings
     CHUNK_SIZE = 300
@@ -36,10 +36,10 @@ class Config:
 
     # Default Retrieval Settings
     CHUNK_RETRIEVAL_K = 8  # Number of chunks to retrieve
-    PROPOSITION_RETRIEVAL_K = 50  # Number of propositions to retrieve per paper
-    MAX_PROPS_PER_PAPER = 5  # Maximum number of propositions to use in the claim verification per paper
+    PROPOSITION_RETRIEVAL_K = 50  # Default number of propositions to retrieve per query
+    MAX_PROPS_PER_PAPER = 5  # Maximum propositions from each paper used in verification (ensures source diversity)
 
-    # Folder and DB related stuff
+    # Knowledge base storage path
     DB_NAME = "data/kb_all" #"data/kb_benchmarking_scifact_dev" # "data/kb_benchmarking_msvec" # #"data/kb_benchmarking_scifact"
 
     # Google gRPC logging for ALTS (Application Layer Transport Security) credential

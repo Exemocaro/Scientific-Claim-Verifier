@@ -15,7 +15,7 @@ import tempfile
 import traceback
 import uvicorn
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
 from fastapi.templating import Jinja2Templates
@@ -70,7 +70,7 @@ def get_chunk_section(chunk_id: str) -> str:
     return ""
 
 
-def format_source_badge(section: str = "", page: int = None) -> str:
+def format_source_badge(section: str = "", page: Optional[int] = None) -> str:
     """Format a source badge showing section or page.
 
     Priority: section > page
@@ -619,7 +619,7 @@ async def verify_claim(
             logs.append(" Verification from KB complete!")
 
         # Get paper details for evidence
-        evidence_papers = []
+        evidence_papers: List[Dict[str, Any]] = []
         for prop in result.evidence:
             paper = kb.get_paper(prop.paper_id)
             if paper and paper.id not in [p["id"] for p in evidence_papers]:
@@ -636,8 +636,8 @@ async def verify_claim(
                 )
 
         # Get confidence interpretation
-        confidence_interpretation = get_confidence_interpretation(result.verdict, result.confidence)
-        confidence_level = get_confidence_level(result.confidence)
+        confidence_interpretation = get_confidence_interpretation(result.verdict, int(round(result.confidence)))
+        confidence_level = get_confidence_level(int(round(result.confidence)))
 
         return templates.TemplateResponse(
             "verify.html",
@@ -953,8 +953,6 @@ async def api_paper_detail(paper_id: str):
         "quality_propositions_count": len(paper.get_quality_propositions()),
     }
 
-
-# TODO: not the correct way of doing this!
 @app.post("/api/papers/{paper_id}/extract-fulltext")
 async def api_extract_fulltext(paper_id: str):
     """Extract propositions from full text of a paper."""
@@ -1249,18 +1247,20 @@ async def api_fetch_pmc_fulltext(paper_id: str):
 
         # Fetch full text from PMC
         result = pmc_api.get_full_text(paper.pmc_id)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Failed to fetch data from PMC")
 
         if not result.get("has_full_text", False):
             message = "Full text not available on PMC"
             if result.get("is_scanned", False):
                 message = "Paper is available as scanned PDF only (no extractable text)"
 
-            return {"success": False, "message": message, "pdf_url": result.get("pdf_url")}
+            return {"success": False, "message": message, "pdf_url": result.get("pdf_url", "")}
 
         # Update paper with full text
         paper.full_text = result.get("full_text_sections", [])
         if result.get("pdf_url"):
-            paper.pdf_url = result.get("pdf_url")
+            paper.pdf_url = result.get("pdf_url", "")
 
         print(f"Successfully fetched {len(paper.full_text)} sections from PMC")
 
@@ -1290,7 +1290,7 @@ async def api_upload_paper(file: UploadFile = File(...), extraction_method: str 
     try:
         # Validate file extension
         allowed_extensions = [".pdf", ".txt", ".md"]
-        file_ext = os.path.splitext(file.filename)[1].lower()
+        file_ext = os.path.splitext(str(file.filename or ""))[1].lower()
         if file_ext not in allowed_extensions:
             return JSONResponse(
                 status_code=400,
@@ -1380,7 +1380,7 @@ async def api_upload_multiple_papers(files: List[UploadFile] = File(...), extrac
         files: List of PDF, TXT, or MD files to upload
         extraction_method: PDF extraction method (pymupdf, marker, pdfplumber, pypdf)
     """
-    results = []
+    results: List[Dict] = []
 
     # Validate extraction method
     allowed_methods = ["pymupdf", "marker", "pdfplumber", "pypdf"]
@@ -1394,7 +1394,7 @@ async def api_upload_multiple_papers(files: List[UploadFile] = File(...), extrac
         try:
             # Validate file extension
             allowed_extensions = [".pdf", ".txt", ".md"]
-            file_ext = os.path.splitext(file.filename)[1].lower()
+            file_ext = os.path.splitext(file.filename or "")[1].lower()
             if file_ext not in allowed_extensions:
                 results.append(
                     {
@@ -1485,7 +1485,7 @@ async def api_upload_multiple_papers_no_extraction(
         files: List of PDF, TXT, or MD files to upload
         extraction_method: PDF extraction method (pymupdf, marker, pdfplumber, pypdf)
     """
-    results = []
+    results: List[Dict] = []
 
     # Validate extraction method
     allowed_methods = ["pymupdf", "marker", "pdfplumber", "pypdf"]
@@ -1499,7 +1499,7 @@ async def api_upload_multiple_papers_no_extraction(
         try:
             # Validate file extension
             allowed_extensions = [".pdf", ".txt", ".md"]
-            file_ext = os.path.splitext(file.filename)[1].lower()
+            file_ext = os.path.splitext(file.filename or "")[1].lower()
             if file_ext not in allowed_extensions:
                 results.append(
                     {

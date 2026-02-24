@@ -1,7 +1,6 @@
 """Confidence score interpretation helper.
 
-Maps (verdict, confidence) pairs to human-readable interpretations
-based on the confidence scale defined in claim_verifier.py.
+Maps (verdict, confidence) pairs to human-readable interpretations.
 """
 
 from typing import Dict, Tuple

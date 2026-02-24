@@ -4,9 +4,7 @@ from typing import List, Dict, Any
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from scverifier.config.settings import Config
-from scverifier.core.retrieval.retrieval_system import RetrievalSystem
 from scverifier.data.models import Proposition
-from scverifier.utils.id_generator import get_next_prop_id
 
 
 class ResponseGenerator:
@@ -16,7 +14,6 @@ class ResponseGenerator:
     - Creating context from retrieved propositions
     - Generating AI responses based on context
     - Formatting and extracting source information
-    - Providing high-level Q&A interface
     """
 
     def __init__(self):
@@ -79,60 +76,6 @@ Answer:"""
             "num_sources": len(retrieved_props),
             "sources": self._extract_source_info(retrieved_props),
         }
-
-    # ======================== HIGH-LEVEL Q&A INTERFACE ========================
-
-    def ask_question(
-        self, retrieval_system: RetrievalSystem, question: str, use_propositions: bool = True, verbose: bool = True
-    ) -> Dict[str, Any]:
-        """High-level interface to ask a question and get an AI-generated response with sources.
-
-        This method combines retrieval and generation in a single convenient interface.
-
-        Args:
-            retrieval_system: RetrievalSystem instance to use for document retrieval
-            question: User's question
-            use_propositions: Whether to use proposition-based (True) or chunk-based (False) retrieval
-            verbose: Whether to print the response and sources
-
-        Returns:
-            Dictionary containing question, answer, and source information
-
-        Raises:
-            ValueError: If retrieval system is not properly initialized
-        """
-        # Retrieve relevant domain objects
-        if use_propositions:
-            retrieved_items = retrieval_system.query_propositions(question)
-            retrieval_type = "proposition-based"
-        else:
-            # For chunks, we need to convert to Propositions for consistency
-            # (since response generation expects Proposition-like objects)
-            # TODO: remove this, jeez
-            chunks = retrieval_system.query_chunks(question)
-            # Convert Chunks to Propositions for response generation
-            retrieved_items = [
-                Proposition(
-                    text=chunk.text,
-                    chunk_id=chunk.chunk_id,
-                    source=chunk.source,
-                    paper_id=chunk.paper_id,
-                    prop_id=get_next_prop_id(),
-                    page=chunk.page,
-                    evaluation=None,
-                )
-                for chunk in chunks
-            ]
-            retrieval_type = "chunk-based"
-
-        # Generate response
-        response_data = self.generate_response(question, retrieved_items)
-
-        # Print formatted output if requested
-        if verbose:
-            self._print_response(response_data, retrieval_type)
-
-        return response_data
 
     # ======================== FORMATTING UTILITIES ========================
 

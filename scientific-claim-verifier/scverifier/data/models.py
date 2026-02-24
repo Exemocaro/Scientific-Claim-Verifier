@@ -407,10 +407,10 @@ class VerificationResult:
 
     claim: str
     verdict: str  # "SUPPORTS", "REFUTES", "INSUFFICIENT_EVIDENCE"
-    confidence: float  # 0-10
+    confidence: float  # 1-10
     reasoning: str
     evidence: List[Proposition]  # All relevant propositions used for verification
-    token_usage: Dict[str, int] = None  # Token usage: {input_tokens, output_tokens, total_tokens}
+    token_usage: Optional[Dict[str, int]] = None  # Token usage: {input_tokens, output_tokens, total_tokens}
 
     def get_papers_used(self) -> List[str]:
         """Get unique paper IDs from evidence."""

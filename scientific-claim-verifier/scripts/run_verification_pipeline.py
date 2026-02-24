@@ -24,6 +24,7 @@ from scverifier.pipelines.verification_pipeline import VerificationPipeline
 from scverifier.core.knowledge.knowledge_base import KnowledgeBase
 from scverifier.data.models import VerificationResult
 from scverifier.config.settings import Config
+from scverifier.core.verification.confidence_interpreter import get_confidence_interpretation
 
 
 def format_verdict(verdict: str) -> str:
@@ -72,6 +73,8 @@ def print_results(result: VerificationResult, kb: KnowledgeBase):
 
     print("\n Confidence:")
     print(f"   {format_confidence(result.confidence)}")
+    interpretation = get_confidence_interpretation(result.verdict, int(round(result.confidence)))
+    print(f"   {interpretation}")
 
     print("\n Reasoning:")
     # Word wrap reasoning
