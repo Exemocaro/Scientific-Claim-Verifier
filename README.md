@@ -1,7 +1,22 @@
 # Scientific Claim Verifier
 
-Full code for the Master Thesis **"Development of a Language Model-Based Framework for Credibility Assessment and Verification of Scientific Claims"** by **Mateus Pereira**.
-A framework for automated verification of scientific claims using Large Language Models and proposition-based retrieval. Made in Python. Uses langchain and fastapi.
+Full code for the Master Thesis **"Development of a Language Model-Based Framework for Credibility Assessment and Verification of Scientific Claims"** by **Mateus Pereira** (final grade: **19/20**).
+
+A framework for automated verification of scientific claims using Large Language Models and proposition-based retrieval. Made in Python, built on LangChain and FastAPI.
+
+## What it does
+
+Given a scientific claim, the framework decides whether the existing literature supports it, refutes it, or is inconclusive — and how credible that evidence is. It works in a few stages:
+
+1. **Search** — finds relevant papers through scientific literature APIs (PubMed, PubMed Central, OpenAlex, Semantic Scholar, CORE).
+2. **Extract** — an LLM breaks each paper into atomic, self-contained *propositions* (single factual statements).
+3. **Index** — propositions and document chunks are embedded and stored in a FAISS vector knowledge base, persisted alongside paper metadata in SQLite.
+4. **Retrieve** — for a given claim, the most semantically relevant propositions are retrieved.
+5. **Verify** — an LLM weighs the retrieved evidence against the claim and produces a verdict (`SUPPORTS`, `REFUTES`, or `INSUFFICIENT_EVIDENCE`), together with a credibility score that accounts for paper quality (study type, methodology, recency).
+
+Crucially, every verdict comes with a written **rationale** explaining *why* the evidence supports, refutes, or fails to settle the claim. The rationale **cites the specific sources it relied on** with inline references, so each conclusion is traceable back to the exact sentence and paper it came from.
+
+Beyond the core pipeline, the project includes a FastAPI web interface, an autonomous agent verification mode, and a benchmarking suite (CoverBench, HealthVer, SciFact).
 
 ## Quick Start
 
@@ -24,9 +39,6 @@ A framework for automated verification of scientific claims using Large Language
     Create a `.env` file in the `scientific-claim-verifier` directory with the following variables:
 
     ```bash
-    # LLM Provider: "gemini" or "azure"
-    LLM_PROVIDER=gemini
-
     # Gemini API Key
     GEMINI_API_KEY=your_gemini_api_key_here
 
@@ -62,6 +74,8 @@ A framework for automated verification of scientific claims using Large Language
     Check examples below!
 
 ### Command Line Usage
+
+> The repository ships with a prebuilt knowledge base at `data/kb_all` (the default `DB_NAME`), so you can verify claims against existing evidence right away with `--kb-only`, without first extracting your own corpus.
 
 ```bash
 # Extract propositions from documents (all sections by default)

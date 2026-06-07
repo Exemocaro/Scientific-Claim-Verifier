@@ -360,40 +360,6 @@ class RetrievalSystem:
 
         return results
 
-    def query_chunks(self, query: str, top_k: Optional[int] = None) -> List[Chunk]:
-        """Query the chunk-based vector store for similar documents.
-
-        Args:
-            query: Search query string
-            top_k: Optional number of results to return (overrides config default)
-
-        Returns:
-            List of Chunk domain objects (converted at boundary)
-
-        Raises:
-            ValueError: If chunk vector store is not initialized
-        """
-        if self.chunk_retriever is None:
-            raise ValueError(
-                "Chunk vector store not initialized. "
-                "Call create_chunk_vectorstore or add_to_chunk_vectorstore first."
-            )
-
-        # Use provided top_k or fall back to config default
-        k = top_k if top_k is not None else Config.CHUNK_RETRIEVAL_K
-
-        # Create temporary retriever with custom k value if needed
-        if top_k is not None:
-            retriever = self.chunk_vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": k})
-        else:
-            retriever = self.chunk_retriever
-
-        # Internal retrieval returns Documents
-        docs = Config.retry_llm_call(lambda: retriever.invoke(query))
-
-        # Convert to domain objects at the boundary
-        return [Chunk.from_langchain_document(doc) for doc in docs]
-
     def query_chunks_with_scores(self, query: str, top_k: Optional[int] = None) -> List[Tuple[Chunk, float]]:
         """Query chunks and return with similarity scores.
 

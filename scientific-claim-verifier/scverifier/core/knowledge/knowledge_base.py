@@ -31,7 +31,6 @@ class KnowledgeBase:
         """Initialize an empty knowledge base."""
         self.papers: Dict[str, Paper] = {}  # paper_id -> Paper (in-memory cache)
         self.retrieval_system = RetrievalSystem()
-        self.db: Optional[PaperDatabase] = None  # Initialized on save/load
 
     # ======================== ID COUNTER INITIALIZATION ========================
 
@@ -277,7 +276,7 @@ class KnowledgeBase:
         Returns:
             List of Proposition objects matching the query
         """
-        # RetrievalSystem now returns domain objects directly
+        # RetrievalSystem returns domain objects directly
         return self.retrieval_system.query_propositions(query, top_k)
 
     def search_chunks(self, query: str, top_k: Optional[int] = None) -> List[Chunk]:
@@ -289,7 +288,7 @@ class KnowledgeBase:
         Returns:
             List of Chunk objects matching the query
         """
-        # RetrievalSystem now returns domain objects directly
+        # RetrievalSystem returns domain objects directly
         return self.retrieval_system.query_chunks(query, top_k)
 
     def search_propositions_by_paper(self, query: str, paper_id: str) -> List[Proposition]:
@@ -302,7 +301,7 @@ class KnowledgeBase:
         Returns:
             List of matching Proposition objects from the paper
         """
-        # RetrievalSystem now returns domain objects directly
+        # RetrievalSystem returns domain objects directly
         return self.retrieval_system.query_propositions_by_source(query, paper_id)
 
     def search_chunks_by_paper(self, query: str, paper_id: str) -> List[Chunk]:
@@ -315,7 +314,7 @@ class KnowledgeBase:
         Returns:
             List of matching Chunk objects from the paper
         """
-        # RetrievalSystem now returns domain objects directly
+        # RetrievalSystem returns domain objects directly
         return self.retrieval_system.query_chunks_by_source(query, paper_id)
 
     def get_papers_for_query(self, query: str) -> Dict[str, List[Proposition]]:

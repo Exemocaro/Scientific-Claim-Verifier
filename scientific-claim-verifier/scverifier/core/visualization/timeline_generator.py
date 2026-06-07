@@ -66,15 +66,13 @@ class TimelineGenerator:
 
         return result
 
-    def similarity_to_color(self, similarity: float, min_sim: float, max_sim: float) -> str:
+    def similarity_to_color(self, similarity: float) -> str:
         """Convert similarity score to RGB color string using absolute 0-1 gradient.
 
         Red (0.0) -> Yellow (0.5) -> Green (1.0)
 
         Args:
             similarity: Similarity score (0.0 to 1.0)
-            min_sim: Minimum similarity in the dataset (unused, kept for compatibility)
-            max_sim: Maximum similarity in the dataset (unused, kept for compatibility)
 
         Returns:
             RGB color string like 'rgb(40, 167, 69)'
@@ -128,7 +126,7 @@ class TimelineGenerator:
         avg_similarities = [year_data[year]["avg_similarity"] for year in years]
 
         # Generate colors based on absolute similarity (0-1 scale)
-        colors = [self.similarity_to_color(sim, 0.0, 1.0) for sim in avg_similarities]
+        colors = [self.similarity_to_color(sim) for sim in avg_similarities]
 
         # Create hover text with details
         hover_text = [
@@ -352,7 +350,7 @@ class TimelineGenerator:
             paper_labels.append(f"{title}<br>({info['year']}) - {info['prop_count']} props")
             
             similarities.append(info["avg_similarity"])
-            colors.append(self.similarity_to_color(info["avg_similarity"], 0.0, 1.0))
+            colors.append(self.similarity_to_color(info["avg_similarity"]))
             
             # Full title for hover
             full_title = info["title"]
