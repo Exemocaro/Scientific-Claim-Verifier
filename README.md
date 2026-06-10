@@ -16,7 +16,7 @@ The evidence base is built by turning literature into searchable, credibility-aw
 - **Credibility & quality assessment** — each article gets a 1–5★ credibility rating derived from its study type (meta-analysis and systematic review rank highest, down through RCTs, cohort/case-control, to case reports), methodology metadata (sample size, blinding, randomization, population type), citation count, recency, and full-text availability. Each extracted proposition is graded by an LLM on four dimensions — accuracy, clarity, completeness, and conciseness (1–10 each) — and only those clearing the quality threshold are kept as high-quality evidence.
 - **Storage with metadata and scores** — propositions and chunks are embedded and stored in a FAISS vector knowledge base, persisted alongside paper metadata and credibility scores in SQLite.
 
-This stage is optional: the repository ships with a prebuilt knowledge base, so claims can be verified against existing evidence right away.
+This stage is optional as the agent can dynamically extract propositions from a few key papers and add them to the knowledge base as it goes (using its web search tool, for example), but it can be run in batch to build a large evidence base upfront.
 
 ### 2. Evidence Retrieval
 
@@ -220,6 +220,7 @@ python process_batch_results.py --results-file path/to/results.jsonl
 ```
 
 Features:
+
 - **Chunked Processing**: Use `--offset` and `--limit` flags to process claims in manageable batches
 - **Resumable**: Process large datasets incrementally (e.g., CoverBench's 733 claims in 100-claim batches)
 - **Timing**: Automatically tracks and displays processing time for each batch
@@ -241,6 +242,7 @@ python -m scverifier.core.benchmarking.run_benchmark scifact --max-items 10
 ```
 
 Available benchmarks:
+
 - **CoverBench**: 733 complex claims with rich grounding contexts (Google)
 - **HealthVer**: Health-related claim verification dataset
 - **SciFact**: Scientific fact verification dataset
@@ -258,6 +260,7 @@ uvicorn scverifier.webapp.main:app --reload
 ```
 
 Features:
+
 - Browse papers in the knowledge base
 - View paper details, chunks, and propositions
 - Search propositions and chunks
