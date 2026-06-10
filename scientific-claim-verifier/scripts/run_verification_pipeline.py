@@ -20,24 +20,32 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from scverifier.pipelines.verification_pipeline import VerificationPipeline
-from scverifier.core.knowledge.knowledge_base import KnowledgeBase
-from scverifier.data.models import VerificationResult
 from scverifier.config.settings import Config
-from scverifier.core.verification.confidence_interpreter import get_confidence_interpretation
+from scverifier.core.knowledge.knowledge_base import KnowledgeBase
+from scverifier.core.verification.confidence_interpreter import (
+    get_confidence_interpretation,
+)
+from scverifier.data.models import VerificationResult
+from scverifier.pipelines.verification_pipeline import VerificationPipeline
 
 
 def format_verdict(verdict: str) -> str:
-    """Format verdict with emoji.
+    """Format verdict with color.
 
     Args:
         verdict: Verdict string
 
     Returns:
-        Formatted verdict with emoji
+        Formatted verdict with ANSI color
     """
-    emoji_map = {"SUPPORTS": "", "REFUTES": "", "INSUFFICIENT_EVIDENCE": "❓"}
-    return f"{emoji_map.get(verdict, '')} {verdict}"
+    colors = {
+        "SUPPORTS": "\033[1;32m",  # bold green
+        "REFUTES": "\033[1;31m",  # bold red
+        "INSUFFICIENT_EVIDENCE": "\033[1;33m",  # bold yellow
+    }
+    reset = "\033[0m"
+    color = colors.get(verdict, "")
+    return f"Verdict: {color}{verdict}{reset}"
 
 
 def format_confidence(confidence: float) -> str:
@@ -73,7 +81,9 @@ def print_results(result: VerificationResult, kb: KnowledgeBase):
 
     print("\n Confidence:")
     print(f"   {format_confidence(result.confidence)}")
-    interpretation = get_confidence_interpretation(result.verdict, int(round(result.confidence)))
+    interpretation = get_confidence_interpretation(
+        result.verdict, int(round(result.confidence))
+    )
     print(f"   {interpretation}")
 
     print("\n Reasoning:")
@@ -108,7 +118,9 @@ def print_results(result: VerificationResult, kb: KnowledgeBase):
             # Get paper and credibility info
             paper = kb.get_paper(prop.paper_id)
             if paper and paper.credibility:
-                evidence_emoji = "" if paper.credibility.evidence_type == "full_text" else ""
+                evidence_emoji = (
+                    "" if paper.credibility.evidence_type == "full_text" else ""
+                )
                 paper_info = (
                     f"{prop.source} "
                     f"({paper.credibility.study_type}, {evidence_emoji} {paper.credibility.evidence_type}, "
@@ -140,10 +152,15 @@ def print_results(result: VerificationResult, kb: KnowledgeBase):
 def main():
     """Main function."""
     # Parse arguments
-    parser = argparse.ArgumentParser(description="Verify a scientific claim using the verification pipeline")
+    parser = argparse.ArgumentParser(
+        description="Verify a scientific claim using the verification pipeline"
+    )
     parser.add_argument("claim", help="Scientific claim to verify")
     parser.add_argument(
-        "--max-papers", type=int, default=30, help="Maximum number of papers to search for (default: 30)"
+        "--max-papers",
+        type=int,
+        default=30,
+        help="Maximum number of papers to search for (default: 30)",
     )
     parser.add_argument(
         "--kb-only",
@@ -221,11 +238,15 @@ def main():
 
         if args.kb_only:
             # Use only KB data
-            result = pipeline.verify_claim_from_kb(args.claim, quality_claims=quality_claims)
+            result = pipeline.verify_claim_from_kb(
+                args.claim, quality_claims=quality_claims
+            )
         else:
             # Search for papers and verify
             # Note: The extraction evaluation is already configured via pipeline.extractor.skip_evaluation
-            result = pipeline.verify_claim_with_search(args.claim, max_papers=args.max_papers, quality_claims=quality_claims)
+            result = pipeline.verify_claim_with_search(
+                args.claim, max_papers=args.max_papers, quality_claims=quality_claims
+            )
 
         # Print results
         print_results(result, kb)
@@ -233,10 +254,10 @@ def main():
         # Note: KB already saved incrementally during search
         # This final save is just a safety check
         if not args.kb_only:
-            print(f"\n{'='*70}")
+            print(f"\n{'=' * 70}")
             print("  Note: Knowledge base was saved incrementally during processing")
 
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(" Verification complete!")
         print("=" * 70 + "\n")
 

@@ -6,15 +6,104 @@ A framework for automated verification of scientific claims using Large Language
 
 ## What it does
 
-Given a scientific claim, the framework decides whether the existing literature supports it, refutes it, or is inconclusive — and how credible that evidence is. It works in a few stages:
+Given a scientific claim, the framework decides whether the existing literature supports it, refutes it, or is inconclusive — and how credible that evidence is. The verification flow is organized in three stages:
 
-1. **Search** — finds relevant papers through scientific literature APIs (PubMed, PubMed Central, OpenAlex, Semantic Scholar, CORE).
-2. **Extract** — an LLM breaks each paper into atomic, self-contained *propositions* (single factual statements).
-3. **Index** — propositions and document chunks are embedded and stored in a FAISS vector knowledge base, persisted alongside paper metadata in SQLite.
-4. **Retrieve** — for a given claim, the most semantically relevant propositions are retrieved.
-5. **Verify** — an LLM weighs the retrieved evidence against the claim and produces a verdict (`SUPPORTS`, `REFUTES`, or `INSUFFICIENT_EVIDENCE`), together with a credibility score that accounts for paper quality (study type, methodology, recency).
+### 1. Knowledge Base Construction (optional)
 
-Crucially, every verdict comes with a written **rationale** explaining *why* the evidence supports, refutes, or fails to settle the claim. The rationale **cites the specific sources it relied on** with inline references, so each conclusion is traceable back to the exact sentence and paper it came from.
+The evidence base is built by turning literature into searchable, credibility-aware units:
+
+- **Articles → Chunks → Propositions** — papers are retrieved through scientific literature APIs (PubMed, PubMed Central, OpenAlex, Semantic Scholar, CORE), split into overlapping chunks, and then decomposed by an LLM into atomic, self-contained *propositions* (single factual statements).
+- **Credibility & quality assessment** — each article gets a 1–5★ credibility rating derived from its study type (meta-analysis and systematic review rank highest, down through RCTs, cohort/case-control, to case reports), methodology metadata (sample size, blinding, randomization, population type), citation count, recency, and full-text availability. Each extracted proposition is graded by an LLM on four dimensions — accuracy, clarity, completeness, and conciseness (1–10 each) — and only those clearing the quality threshold are kept as high-quality evidence.
+- **Storage with metadata and scores** — propositions and chunks are embedded and stored in a FAISS vector knowledge base, persisted alongside paper metadata and credibility scores in SQLite.
+
+This stage is optional: the repository ships with a prebuilt knowledge base, so claims can be verified against existing evidence right away.
+
+### 2. Evidence Retrieval
+
+For a given claim, the framework gathers the most relevant evidence. This stage runs in **one of two modes**:
+
+- **Traditional Pipeline** — a structured, fixed sequence: from the claim it generates three complementary search queries (the original claim, an opposing formulation, and a neutral/related variant), performs semantic similarity search over the knowledge base, and weights the retrieved evidence by the credibility of its sources. Best for reproducibility, debugging, and predictable workflows.
+
+- **AI Agent** — autonomous evidence gathering with dynamic planning. The agent iteratively *selects a tool → executes it → evaluates the result → decides whether it has enough evidence*, looping until the investigation is complete. It has access to several tools: proposition search (`search_similar_propositions`), paper discovery (`search_similar_chunks`, `find_similar_papers`), in-paper and source lookup (`search_propositions_in_paper`, `get_proposition_source_chunk`, `get_paper_details`), knowledge base overview (`get_kb_statistics`), and online literature search (`search_online_papers` for PubMed, Semantic Scholar, CORE). Best for complex claims that require adaptive investigation and cases where the evidence path isn't predictable.
+
+### 3. Verdict Generation
+
+An LLM weighs the retrieved evidence against the claim and produces a verdict — `SUPPORTS`, `REFUTES`, or `INSUFFICIENT_EVIDENCE` — together with a **confidence score** (on a 1–10 scale) that reflects the strength and credibility of the supporting evidence.
+
+Crucially, every verdict comes with a written **rationale** explaining *why* the evidence supports, refutes, or fails to settle the claim. The rationale **cites the specific propositions it relied on** with inline references (e.g. `[Source 1]`, `[Sources 1, 2, 3]`), so each conclusion is traceable back to the exact sentence and paper it came from.
+
+### Example output
+
+Running the pipeline on a claim prints the verdict, a confidence bar with its interpretation, the cited rationale, and every evidence source used:
+
+```text
+======================================================================
+ VERIFICATION RESULTS
+======================================================================
+
+ Claim:
+   A high microerythrocyte count raises vulnerability to severe anemia
+   in homozygous alpha(+)-thalassemia trait subjects.
+
+ Verdict: REFUTES
+
+ Confidence:
+   9.0/10 [█████████░]
+   Extremely confident the claim is false - overwhelming, consistent
+   evidence contradicting it
+
+ Reasoning:
+   The claim states that a high microerythrocyte count raises
+   vulnerability to severe anemia in homozygous alpha(+)-thalassemia
+   trait subjects. However, the evidence indicates the opposite.
+   Children homozygous for alpha(+)-thalassaemia have microcytosis and
+   an increased erythrocyte count [Sources 1, 2, 3]. This haematological
+   profile actually reduces the risk of severe malarial anaemia (SMA)
+   during acute malaria compared to children of normal genotype
+   [Source 5]. Furthermore, these children require a 10% greater
+   reduction in erythrocyte count for their Hb concentration to fall to
+   50 g/l, suggesting increased resistance to severe anemia [Source 4].
+
+ Evidence Summary:
+   Evidence used: 5 propositions
+   Sources: 1 paper
+
+ All Evidence Sources:
+======================================================================
+
+   1. Increased Microerythrocyte Count in Homozygous α+-Thalassaemia
+      Contributes to Protection against Severe Malarial Anaemia
+      18174210
+      Individuals homozygous for alpha(+)-thalassaemia have microcytosis.
+
+   2. Increased Microerythrocyte Count in Homozygous α+-Thalassaemia
+      Contributes to Protection against Severe Malarial Anaemia
+      18174210
+      Individuals homozygous for alpha(+)-thalassaemia have an increased
+      erythrocyte count.
+
+   3. Increased Microerythrocyte Count in Homozygous α+-Thalassaemia
+      Contributes to Protection against Severe Malarial Anaemia
+      18174210
+      Increased erythrocyte count and microcytosis occur in children
+      homozygous for alpha(+)-thalassaemia.
+
+   4. Increased Microerythrocyte Count in Homozygous α+-Thalassaemia
+      Contributes to Protection against Severe Malarial Anaemia
+      18174210
+      Children homozygous for alpha(+)-thalassaemia require a 10% greater
+      reduction in erythrocyte count than children of normal genotype for
+      Hb concentration to fall to 50 g/l.
+
+   5. Increased Microerythrocyte Count in Homozygous α+-Thalassaemia
+      Contributes to Protection against Severe Malarial Anaemia
+      18174210
+      The haematological profile in children homozygous for
+      alpha(+)-thalassaemia reduces the risk of SMA during acute malaria
+      compared to children of normal genotype.
+```
+
+> This example is drawn from the SciFact benchmark (claim id 42); the framework correctly refuted the claim with high confidence, citing the gold source document.
 
 Beyond the core pipeline, the project includes a FastAPI web interface, an autonomous agent verification mode, and a benchmarking suite (CoverBench, HealthVer, SciFact).
 
